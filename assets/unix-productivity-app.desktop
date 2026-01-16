@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Unix Productivity App
+GenericName=Task Manager
+Comment=Productivity application with calendar, kanban, pomodoro and more
+Exec=python3 /home/jjulianleon/Desktop/CalendarWidget/main_app.py
+Icon=/home/jjulianleon/Desktop/CalendarWidget/assets/app_icon.svg
+Terminal=false
+Categories=Office;ProjectManagement;Calendar;
+Keywords=tasks;calendar;kanban;pomodoro;productivity;
+StartupNotify=true
+StartupWMClass=UnixProductivityApp

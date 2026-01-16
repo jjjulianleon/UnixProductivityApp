@@ -93,7 +93,7 @@ class MonthlyCalendar(QWidget):
         # Navigation header
         nav_layout = QHBoxLayout()
         
-        self.prev_btn = QPushButton("◀")
+        self.prev_btn = QPushButton("<")
         self.prev_btn.setFont(QFont(FONT_FAMILY, 10))
         self.prev_btn.setFixedSize(28, 28)
         self.prev_btn.setStyleSheet(get_button_style())
@@ -107,7 +107,7 @@ class MonthlyCalendar(QWidget):
         self.month_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         nav_layout.addWidget(self.month_label, 1)
         
-        self.next_btn = QPushButton("▶")
+        self.next_btn = QPushButton(">")
         self.next_btn.setFont(QFont(FONT_FAMILY, 10))
         self.next_btn.setFixedSize(28, 28)
         self.next_btn.setStyleSheet(get_button_style())

@@ -14,6 +14,7 @@ from src.utils.constants import (
     POMODORO_LONG_BREAK, POMODORO_SESSIONS_BEFORE_LONG_BREAK
 )
 from src.core.database import db
+from src.core.signals import SignalHub
 
 
 class PomodoroTimer(QWidget):
@@ -24,6 +25,7 @@ class PomodoroTimer(QWidget):
     def __init__(self, compact: bool = False, parent=None):
         super().__init__(parent)
         self.compact = compact
+        self.signals = SignalHub.get_instance()
         
         # Timer state
         self.is_running = False
@@ -51,7 +53,7 @@ class PomodoroTimer(QWidget):
         
         # Header
         if not self.compact:
-            header = QLabel("🍅 Pomodoro")
+            header = QLabel("Pomodoro")
             header.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
             header.setStyleSheet(f"color: rgb({COLORS['danger']}); background: transparent;")
             header.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -96,7 +98,7 @@ class PomodoroTimer(QWidget):
         controls_layout.setSpacing(8)
         
         # Start/Pause button
-        self.start_btn = QPushButton("▶ Iniciar")
+        self.start_btn = QPushButton("Iniciar")
         self.start_btn.setFont(QFont(FONT_FAMILY, 9))
         self.start_btn.setStyleSheet(get_button_style('success'))
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -104,22 +106,22 @@ class PomodoroTimer(QWidget):
         controls_layout.addWidget(self.start_btn)
         
         # Reset button
-        self.reset_btn = QPushButton("↺")
-        self.reset_btn.setFont(QFont(FONT_FAMILY, 10))
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setFont(QFont(FONT_FAMILY, 9))
         self.reset_btn.setStyleSheet(get_button_style())
         self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reset_btn.setFixedWidth(40)
+        self.reset_btn.setFixedWidth(60)
         self.reset_btn.clicked.connect(self._reset)
         controls_layout.addWidget(self.reset_btn)
         
         # Skip button
         if not self.compact:
-            self.skip_btn = QPushButton("⏭")
-            self.skip_btn.setFont(QFont(FONT_FAMILY, 10))
+            self.skip_btn = QPushButton("Saltar")
+            self.skip_btn.setFont(QFont(FONT_FAMILY, 9))
             self.skip_btn.setStyleSheet(get_button_style())
             self.skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self.skip_btn.setFixedWidth(40)
-            self.skip_btn.setToolTip("Saltar sesión")
+            self.skip_btn.setFixedWidth(60)
+            self.skip_btn.setToolTip("Saltar sesion")
             self.skip_btn.clicked.connect(self._skip)
             controls_layout.addWidget(self.skip_btn)
         
@@ -185,7 +187,7 @@ class PomodoroTimer(QWidget):
         """Start the timer"""
         self.is_running = True
         self.timer.start(1000)
-        self.start_btn.setText("⏸ Pausar")
+        self.start_btn.setText("Pausar")
         self.start_btn.setStyleSheet(get_button_style('danger'))
         
         # Start pomodoro session in DB
@@ -199,7 +201,7 @@ class PomodoroTimer(QWidget):
         """Pause the timer"""
         self.is_running = False
         self.timer.stop()
-        self.start_btn.setText("▶ Continuar")
+        self.start_btn.setText("Continuar")
         self.start_btn.setStyleSheet(get_button_style('success'))
     
     def _reset(self):
@@ -215,7 +217,7 @@ class PomodoroTimer(QWidget):
             else:
                 self.remaining_seconds = self.short_break
         
-        self.start_btn.setText("▶ Iniciar")
+        self.start_btn.setText("Iniciar")
         self.start_btn.setStyleSheet(get_button_style('success'))
         self.current_session_id = None
         self._update_display()
@@ -247,6 +249,12 @@ class PomodoroTimer(QWidget):
             self.sessions_completed += 1
             self.session_completed.emit('work')
             
+            # Emit signal to hub
+            self.signals.pomodoro_completed.emit({
+                'session_type': 'work',
+                'sessions_completed': self.sessions_completed
+            })
+            
             # Switch to break
             self.is_work_session = False
             if self.sessions_completed % POMODORO_SESSIONS_BEFORE_LONG_BREAK == 0:
@@ -261,7 +269,7 @@ class PomodoroTimer(QWidget):
             self.is_work_session = True
             self.remaining_seconds = self.work_duration
         
-        self.start_btn.setText("▶ Iniciar")
+        self.start_btn.setText("Iniciar")
         self.start_btn.setStyleSheet(get_button_style('success'))
         self._update_display()
     

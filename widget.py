@@ -3,13 +3,14 @@ Desktop Widget - Compact 520x320 widget for KDE Plasma
 """
 import sys
 import subprocess
+from pathlib import Path
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTabWidget, QFrame, QScrollArea, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 
 from src.utils.styles import (
     COLORS, FONT_FAMILY, get_button_style, get_widget_style,
@@ -18,12 +19,17 @@ from src.utils.styles import (
 from src.utils.constants import WIDGET_WIDTH, WIDGET_HEIGHT, DAYS_ES
 from src.core.task_manager import task_manager
 from src.core.database import db
+from src.core.signals import SignalHub
 from src.ui.widgets.calendar import MonthlyCalendar
 from src.ui.widgets.schedule import WeeklySchedule
 from src.ui.widgets.pomodoro import MiniPomodoro
 from src.ui.widgets.common import TaskCard, EmptyState
 from src.ui.widgets.quick_notes import QuickNoteDialog
 from src.ui.dialogs.task_dialogs import TaskDetailDialog, DeadlineTasksDialog
+
+
+# Get assets directory
+ASSETS_DIR = Path(__file__).parent / "assets"
 
 
 class CompactKanban(QWidget):
@@ -33,10 +39,16 @@ class CompactKanban(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.signals = SignalHub.get_instance()
         self.setup_ui()
         self._load_tasks()
-        
-        # task_manager.tasks_updated.connect(self._load_tasks)
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.task_added.connect(self._load_tasks)
+        self.signals.task_updated.connect(self._load_tasks)
+        self.signals.task_deleted.connect(self._load_tasks)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -50,12 +62,12 @@ class CompactKanban(QWidget):
         # Pendiente tab
         self.pending_scroll = self._create_scroll_area()
         self.pending_layout = self.pending_scroll.widget().layout()
-        self.tabs.addTab(self.pending_scroll, "📋 Pendiente")
+        self.tabs.addTab(self.pending_scroll, "Pendiente")
         
         # En progreso tab
         self.progress_scroll = self._create_scroll_area()
         self.progress_layout = self.progress_scroll.widget().layout()
-        self.tabs.addTab(self.progress_scroll, "🔄 Progreso")
+        self.tabs.addTab(self.progress_scroll, "Progreso")
         
         layout.addWidget(self.tabs)
     
@@ -75,7 +87,7 @@ class CompactKanban(QWidget):
         scroll.setWidget(widget)
         return scroll
     
-    def _load_tasks(self):
+    def _load_tasks(self, *args):
         """Load tasks into tabs"""
         # Clear existing
         for layout in [self.pending_layout, self.progress_layout]:
@@ -93,12 +105,12 @@ class CompactKanban(QWidget):
         self._populate_list(self.progress_layout, in_progress, "Sin tareas en progreso")
         
         # Update tab titles with counts
-        self.tabs.setTabText(0, f"📋 Pendiente ({len(pending)})")
-        self.tabs.setTabText(1, f"🔄 Progreso ({len(in_progress)})")
+        self.tabs.setTabText(0, f"Pendiente ({len(pending)})")
+        self.tabs.setTabText(1, f"Progreso ({len(in_progress)})")
     
     def _populate_list(self, layout: QVBoxLayout, tasks: list, empty_msg: str):
         if not tasks:
-            empty = EmptyState(empty_msg, "✅")
+            empty = EmptyState(empty_msg)
             layout.insertWidget(0, empty)
             return
         
@@ -115,10 +127,16 @@ class DeadlinesList(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.signals = SignalHub.get_instance()
         self.setup_ui()
         self._load_tasks()
-        
-        # task_manager.tasks_updated.connect(self._load_tasks)
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.task_added.connect(self._load_tasks)
+        self.signals.task_updated.connect(self._load_tasks)
+        self.signals.task_deleted.connect(self._load_tasks)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -126,7 +144,7 @@ class DeadlinesList(QWidget):
         layout.setSpacing(8)
         
         # Header
-        header = QLabel("⏰ Próximos Deadlines")
+        header = QLabel("Proximos Deadlines")
         header.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         header.setStyleSheet(f"color: rgb({COLORS['danger']}); background: transparent;")
         layout.addWidget(header)
@@ -147,7 +165,7 @@ class DeadlinesList(QWidget):
         scroll.setWidget(self.tasks_widget)
         layout.addWidget(scroll, 1)
     
-    def _load_tasks(self):
+    def _load_tasks(self, *args):
         # Clear existing
         while self.tasks_layout.count() > 1:
             item = self.tasks_layout.takeAt(0)
@@ -162,16 +180,16 @@ class DeadlinesList(QWidget):
         
         # Add today's tasks with marker
         for task in today_tasks:
-            task['_deadline_label'] = '🔴 HOY'
+            task['_deadline_label'] = 'HOY'
             all_deadline_tasks.append(task)
         
         # Add tomorrow's tasks with marker
         for task in tomorrow_tasks:
-            task['_deadline_label'] = '🟠 Mañana'
+            task['_deadline_label'] = 'Manana'
             all_deadline_tasks.append(task)
         
         if not all_deadline_tasks:
-            empty = EmptyState("Sin deadlines próximos 🎉", "📅")
+            empty = EmptyState("Sin deadlines proximos")
             self.tasks_layout.insertWidget(0, empty)
             return
         
@@ -206,7 +224,7 @@ class DeadlinesList(QWidget):
         deadline_label = QLabel(task.get('_deadline_label', ''))
         deadline_label.setFont(QFont(FONT_FAMILY, 8))
         deadline_label.setStyleSheet(f"color: rgb({COLORS['danger']}); background: transparent;")
-        deadline_label.setFixedWidth(60)
+        deadline_label.setFixedWidth(50)
         layout.addWidget(deadline_label)
         
         # Title
@@ -225,6 +243,7 @@ class DesktopWidget(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.signals = SignalHub.get_instance()
         self.setWindowTitle("UnixProductivityApp Widget")
         self.setFixedSize(WIDGET_WIDTH, WIDGET_HEIGHT)
         
@@ -236,8 +255,20 @@ class DesktopWidget(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
+        # Set icon
+        icon_path = ASSETS_DIR / "app_icon.svg"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        
         self.setup_ui()
         self._start_clock()
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub for auto-refresh"""
+        self.signals.task_added.connect(self._sync_deadlines)
+        self.signals.task_updated.connect(self._sync_deadlines)
+        self.signals.task_deleted.connect(self._sync_deadlines)
     
     def setup_ui(self):
         # Main container with glassmorphism
@@ -266,8 +297,8 @@ class DesktopWidget(QWidget):
         header.addStretch()
         
         # Quick note button
-        note_btn = QPushButton("📝")
-        note_btn.setFont(QFont(FONT_FAMILY, 12))
+        note_btn = QPushButton("N")
+        note_btn.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         note_btn.setFixedSize(28, 28)
         note_btn.setStyleSheet(f"""
             QPushButton {{
@@ -281,13 +312,13 @@ class DesktopWidget(QWidget):
             }}
         """)
         note_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        note_btn.setToolTip("Nueva nota rápida")
+        note_btn.setToolTip("Nueva nota rapida")
         note_btn.clicked.connect(self._add_quick_note)
         header.addWidget(note_btn)
         
         # Open main app button
-        app_btn = QPushButton("🚀")
-        app_btn.setFont(QFont(FONT_FAMILY, 12))
+        app_btn = QPushButton("A")
+        app_btn.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         app_btn.setFixedSize(28, 28)
         app_btn.setStyleSheet(f"""
             QPushButton {{
@@ -301,7 +332,7 @@ class DesktopWidget(QWidget):
             }}
         """)
         app_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        app_btn.setToolTip("Abrir aplicación")
+        app_btn.setToolTip("Abrir aplicacion")
         app_btn.clicked.connect(self._open_main_app)
         header.addWidget(app_btn)
         
@@ -319,31 +350,30 @@ class DesktopWidget(QWidget):
         # Calendar tab
         self.calendar = MonthlyCalendar(compact=True)
         self.calendar.deadline_clicked.connect(self._on_deadline_clicked)
-        self.tabs.addTab(self.calendar, "📆")
+        self.tabs.addTab(self.calendar, "Cal")
         
         # Schedule tab
         self.schedule = WeeklySchedule(compact=True)
-        self.tabs.addTab(self.schedule, "📋")
+        self.tabs.addTab(self.schedule, "Sem")
         
         # Kanban tab
         self.kanban = CompactKanban()
         self.kanban.task_clicked.connect(self._on_task_clicked)
-        self.tabs.addTab(self.kanban, "📌")
+        self.tabs.addTab(self.kanban, "Tar")
         
         # Deadlines tab
         self.deadlines = DeadlinesList()
         self.deadlines.task_clicked.connect(self._on_task_clicked)
-        self.tabs.addTab(self.deadlines, "⏰")
+        self.tabs.addTab(self.deadlines, "Urg")
         
         # Pomodoro tab
         self.pomodoro = MiniPomodoro()
-        self.tabs.addTab(self.pomodoro, "🍅")
+        self.tabs.addTab(self.pomodoro, "Pom")
         
         layout.addWidget(self.tabs, 1)
         
         # Sync deadlines to calendar
         self._sync_deadlines()
-        # task_manager.tasks_updated.connect(self._sync_deadlines)
     
     def _start_clock(self):
         """Start the clock timer"""
@@ -357,10 +387,10 @@ class DesktopWidget(QWidget):
         now = datetime.now()
         day_name = DAYS_ES[now.weekday()]
         self.time_label.setText(
-            f"{day_name}, {now.strftime('%d/%m/%Y')} • {now.strftime('%H:%M:%S')}"
+            f"{day_name}, {now.strftime('%d/%m/%Y')} - {now.strftime('%H:%M:%S')}"
         )
     
-    def _sync_deadlines(self):
+    def _sync_deadlines(self, *args):
         """Sync deadlines to calendar"""
         tasks = task_manager.get_tasks_with_deadlines()
         self.calendar.set_deadlines(tasks)
@@ -397,12 +427,15 @@ class DesktopWidget(QWidget):
         obsidian = ObsidianSync()
         obsidian.create_quick_note(title, content)
         db.add_quick_note(title, content)
+        
+        # Emit signal
+        self.signals.note_added.emit({'title': title, 'content': content})
     
     def _open_main_app(self):
         """Open the main application"""
         try:
-            subprocess.Popen([sys.executable, "main_app.py"], 
-                           cwd="/home/jjulianleon/Desktop/CalendarWidget")
+            app_dir = Path(__file__).parent
+            subprocess.Popen([sys.executable, "main_app.py"], cwd=str(app_dir))
         except Exception as e:
             print(f"Error opening main app: {e}")
     
@@ -425,6 +458,11 @@ def main():
     
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    
+    # Set icon
+    icon_path = ASSETS_DIR / "app_icon.svg"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
     
     widget = DesktopWidget()
     widget.show()

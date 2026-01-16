@@ -16,11 +16,9 @@ class ObsidianSync:
         self.tasks_folder = self.vault_path / "Tasks"
         self.rough_notes_folder = self.vault_path / "Rough Notes"
         
-        # Create folders if they don't exist
         self.tasks_folder.mkdir(parents=True, exist_ok=True)
         self.rough_notes_folder.mkdir(parents=True, exist_ok=True)
         
-        # Category files mapping
         self.categories = {
             "personal": "Personal.md",
             "trabajo": "Trabajo.md",
@@ -43,13 +41,13 @@ class ObsidianSync:
         template = f"""# {category.title()}
 
 ## Pendiente
-<!-- Tareas pendientes -->
+
 
 ## En Progreso
-<!-- Tareas en progreso -->
+
 
 ## Completado
-<!-- Tareas completadas -->
+
 """
         path.write_text(template, encoding='utf-8')
     
@@ -69,14 +67,12 @@ class ObsidianSync:
         tasks = []
         content = file_path.read_text(encoding='utf-8')
         
-        # Parse markdown task items
         task_pattern = r'- \[([ xX])\] (.+?)(?:\s*\[deadline: (\d{4}-\d{2}-\d{2})\])?(?:\s*\[priority: (\w+)\])?$'
         
         lines = content.split('\n')
         current_status = 'pendiente'
         
         for line in lines:
-            # Check for status headers
             if '## Pendiente' in line:
                 current_status = 'pendiente'
             elif '## En Progreso' in line:
@@ -84,7 +80,6 @@ class ObsidianSync:
             elif '## Completado' in line:
                 current_status = 'completado'
             
-            # Parse task line
             match = re.match(task_pattern, line.strip())
             if match:
                 checkbox, title, deadline, priority = match.groups()
@@ -111,7 +106,6 @@ class ObsidianSync:
         
         content = file_path.read_text(encoding='utf-8')
         
-        # Create task line
         checkbox = 'x' if status == 'completado' else ' '
         task_line = f"- [{checkbox}] {title}"
         if deadline:
@@ -120,7 +114,6 @@ class ObsidianSync:
             task_line += f" [priority: {priority}]"
         task_line += "\n"
         
-        # Find section to insert
         status_map = {
             'pendiente': '## Pendiente',
             'en_progreso': '## En Progreso',
@@ -128,16 +121,13 @@ class ObsidianSync:
         }
         section_header = status_map.get(status, '## Pendiente')
         
-        # Insert after section header
         if section_header in content:
             idx = content.find(section_header) + len(section_header)
-            # Skip to next line
             while idx < len(content) and content[idx] != '\n':
                 idx += 1
-            idx += 1  # Move past newline
+            idx += 1
             content = content[:idx] + task_line + content[idx:]
         else:
-            # Append at end
             content += f"\n{section_header}\n{task_line}"
         
         file_path.write_text(content, encoding='utf-8')
@@ -156,12 +146,13 @@ class ObsidianSync:
         
         for line in lines:
             if f"- [" in line and old_title in line:
-                # Parse existing task
-                match = re.match(r'- \[([ xX])\] (.+?)(?:\s*\[deadline: (\d{4}-\d{2}-\d{2})\])?(?:\s*\[priority: (\w+)\])?$', line.strip())
+                match = re.match(
+                    r'- \[([ xX])\] (.+?)(?:\s*\[deadline: (\d{4}-\d{2}-\d{2})\])?(?:\s*\[priority: (\w+)\])?$',
+                    line.strip()
+                )
                 if match:
                     checkbox, title, deadline, priority = match.groups()
                     
-                    # Apply updates
                     new_title = kwargs.get('title', old_title)
                     new_status = kwargs.get('status')
                     new_deadline = kwargs.get('deadline', deadline)
@@ -201,7 +192,6 @@ class ObsidianSync:
     
     def save_quick_note(self, title: str, content: str) -> str:
         """Save a quick note to Rough Notes folder"""
-        # Clean title for filename
         safe_title = re.sub(r'[^\w\s-]', '', title)
         safe_title = re.sub(r'\s+', '_', safe_title)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -227,7 +217,6 @@ Created: {datetime.now().strftime("%Y-%m-%d %H:%M")}
         for file_path in self.rough_notes_folder.glob("*.md"):
             content = file_path.read_text(encoding='utf-8')
             
-            # Extract title from first heading
             title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
             title = title_match.group(1) if title_match else file_path.stem
             

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Productivity Widget
+GenericName=Desktop Widget
+Comment=Compact productivity widget for desktop
+Exec=python3 /home/jjulianleon/Desktop/CalendarWidget/widget.py
+Icon=/home/jjulianleon/Desktop/CalendarWidget/assets/app_icon.svg
+Terminal=false
+Categories=Office;Utility;
+Keywords=widget;tasks;calendar;
+StartupNotify=false
+X-KDE-autostart-after=panel

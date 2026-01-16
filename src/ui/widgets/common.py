@@ -74,9 +74,9 @@ class TaskCard(QFrame):
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(8)
         
-        # Priority dot
-        priority_dot = QLabel("●")
-        priority_dot.setFont(QFont(FONT_FAMILY, 6))
+        # Priority indicator (dot)
+        priority_dot = QLabel("[" + priority[0].upper() + "]")
+        priority_dot.setFont(QFont(FONT_FAMILY, 7))
         priority_dot.setStyleSheet(f"color: rgb({priority_color}); background: transparent; border: none;")
         priority_dot.setToolTip(f"Prioridad: {priority.capitalize()}")
         bottom_layout.addWidget(priority_dot)
@@ -90,13 +90,13 @@ class TaskCard(QFrame):
                 deadline_color = get_deadline_color(days_until)
                 
                 if days_until < 0:
-                    deadline_text = f"⚠️ Vencido"
+                    deadline_text = "VENCIDO"
                 elif days_until == 0:
-                    deadline_text = "📅 Hoy"
+                    deadline_text = "Hoy"
                 elif days_until == 1:
-                    deadline_text = "📅 Mañana"
+                    deadline_text = "Manana"
                 else:
-                    deadline_text = f"📅 {deadline_date.strftime('%d/%m')}"
+                    deadline_text = deadline_date.strftime('%d/%m')
                 
                 deadline_label = QLabel(deadline_text)
                 deadline_label.setFont(QFont(FONT_FAMILY, 8))
@@ -117,9 +117,12 @@ class TaskCard(QFrame):
 class DraggableTaskCard(TaskCard):
     """Task card with drag & drop support for Kanban"""
     
+    dropped = pyqtSignal(dict, str, int)  # task, new_status, new_position
+    
     def __init__(self, task: Dict, compact: bool = False, parent=None):
         super().__init__(task, compact, parent)
         self._drag_start_pos = None
+        self.setAcceptDrops(True)
     
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -141,6 +144,7 @@ class DraggableTaskCard(TaskCard):
             import json
             task_json = json.dumps(self.task)
             mime_data.setText(task_json)
+            mime_data.setData("application/x-task", task_json.encode())
             
             drag.setMimeData(mime_data)
             drag.exec(Qt.DropAction.MoveAction)
@@ -163,6 +167,7 @@ class StatCard(QFrame):
     def __init__(self, title: str, value: str, icon: str = "", 
                  color: str = None, parent=None):
         super().__init__(parent)
+        self._value_label = None
         self.setup_ui(title, value, icon, color or COLORS['primary'])
     
     def setup_ui(self, title: str, value: str, icon: str, color: str):
@@ -178,28 +183,22 @@ class StatCard(QFrame):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(4)
         
-        # Icon + Title
-        header = QLabel(f"{icon} {title}" if icon else title)
+        # Title (no icon - icons removed)
+        header = QLabel(title)
         header.setFont(QFont(FONT_FAMILY, 9))
         header.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
         layout.addWidget(header)
         
         # Value
-        value_label = QLabel(value)
-        value_label.setFont(QFont(FONT_FAMILY, 18, QFont.Weight.Bold))
-        value_label.setStyleSheet(f"color: rgb({color}); background: transparent;")
-        layout.addWidget(value_label)
+        self._value_label = QLabel(value)
+        self._value_label.setFont(QFont(FONT_FAMILY, 18, QFont.Weight.Bold))
+        self._value_label.setStyleSheet(f"color: rgb({color}); background: transparent;")
+        layout.addWidget(self._value_label)
     
     def update_value(self, value: str):
         """Update the displayed value"""
-        # Find and update the value label
-        for i in range(self.layout().count()):
-            widget = self.layout().itemAt(i).widget()
-            if isinstance(widget, QLabel):
-                font = widget.font()
-                if font.pointSize() >= 18:
-                    widget.setText(value)
-                    break
+        if self._value_label:
+            self._value_label.setText(value)
 
 
 class SectionHeader(QWidget):
@@ -216,7 +215,7 @@ class SectionHeader(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 8)
         
-        # Title
+        # Title (no emoji)
         title_label = QLabel(title)
         title_label.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
         title_label.setStyleSheet(f"color: rgb({COLORS['text_primary']}); background: transparent;")
@@ -238,19 +237,21 @@ class SectionHeader(QWidget):
 class EmptyState(QWidget):
     """Empty state placeholder"""
     
-    def __init__(self, message: str, icon: str = "📭", parent=None):
+    def __init__(self, message: str, icon: str = "", parent=None):
         super().__init__(parent)
-        self.setup_ui(message, icon)
+        self.setup_ui(message)
     
-    def setup_ui(self, message: str, icon: str):
+    def setup_ui(self, message: str):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(20, 40, 20, 40)
         
-        icon_label = QLabel(icon)
-        icon_label.setFont(QFont(FONT_FAMILY, 32))
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setStyleSheet("background: transparent;")
-        layout.addWidget(icon_label)
+        # Simple dash indicator instead of emoji
+        dash_label = QLabel("---")
+        dash_label.setFont(QFont(FONT_FAMILY, 20))
+        dash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dash_label.setStyleSheet(f"color: rgb({COLORS['text_muted']}); background: transparent;")
+        layout.addWidget(dash_label)
         
         msg_label = QLabel(message)
         msg_label.setFont(QFont(FONT_FAMILY, 10))

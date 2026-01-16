@@ -1,9 +1,12 @@
 """
 Database module for persistent storage using SQLite
+With export/import and backup functionality
 """
 import sqlite3
 import json
-from datetime import datetime
+import csv
+import shutil
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -23,10 +26,13 @@ class Database:
         self.db_dir = Path.home() / ".local" / "share" / "UnixProductivityApp"
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.db_dir / "data.db"
+        self.backup_dir = self.db_dir / "backups"
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._create_tables()
+        self._run_migrations()
     
     def _create_tables(self):
         """Create all necessary tables"""
@@ -41,6 +47,8 @@ class Database:
                 status TEXT DEFAULT 'pendiente',
                 priority TEXT DEFAULT 'media',
                 deadline TEXT,
+                position INTEGER DEFAULT 0,
+                tags TEXT DEFAULT '[]',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 completed_at TEXT,
@@ -102,16 +110,52 @@ class Database:
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER,
+                remind_at TEXT NOT NULL,
+                message TEXT,
+                triggered INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS backup_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backup_path TEXT NOT NULL,
+                backup_type TEXT DEFAULT 'manual',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        self.conn.commit()
+    
+    def _run_migrations(self):
+        """Run any necessary database migrations"""
+        cursor = self.conn.cursor()
+        cursor.execute("PRAGMA table_info(tasks)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'position' not in columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN position INTEGER DEFAULT 0")
+        if 'tags' not in columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN tags TEXT DEFAULT '[]'")
+        
         self.conn.commit()
     
     def add_task(self, title: str, category: str, description: str = "",
                  status: str = "pendiente", priority: str = "media",
-                 deadline: Optional[str] = None) -> int:
+                 deadline: Optional[str] = None, position: int = 0,
+                 tags: List[str] = None) -> int:
         cursor = self.conn.cursor()
+        tags_json = json.dumps(tags or [])
         cursor.execute("""
-            INSERT INTO tasks (title, description, category, status, priority, deadline)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (title, description, category, status, priority, deadline))
+            INSERT INTO tasks (title, description, category, status, priority, deadline, position, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (title, description, category, status, priority, deadline, position, tags_json))
         self.conn.commit()
         return cursor.lastrowid
     
@@ -121,12 +165,39 @@ class Database:
         kwargs['updated_at'] = datetime.now().isoformat()
         if kwargs.get('status') == 'completado':
             kwargs['completed_at'] = datetime.now().isoformat()
+        if 'tags' in kwargs and isinstance(kwargs['tags'], list):
+            kwargs['tags'] = json.dumps(kwargs['tags'])
         set_clause = ", ".join([f"{k} = ?" for k in kwargs.keys()])
         values = list(kwargs.values()) + [task_id]
         cursor = self.conn.cursor()
         cursor.execute(f"UPDATE tasks SET {set_clause} WHERE id = ?", values)
         self.conn.commit()
         return cursor.rowcount > 0
+    
+    def update_task_position(self, task_id: int, new_position: int, new_status: Optional[str] = None) -> bool:
+        cursor = self.conn.cursor()
+        if new_status:
+            cursor.execute(
+                "UPDATE tasks SET position = ?, status = ?, updated_at = ? WHERE id = ?",
+                (new_position, new_status, datetime.now().isoformat(), task_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE tasks SET position = ?, updated_at = ? WHERE id = ?",
+                (new_position, datetime.now().isoformat(), task_id)
+            )
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def reorder_tasks_in_status(self, status: str, task_ids: List[int]) -> bool:
+        cursor = self.conn.cursor()
+        for position, task_id in enumerate(task_ids):
+            cursor.execute(
+                "UPDATE tasks SET position = ? WHERE id = ? AND status = ?",
+                (position, task_id, status)
+            )
+        self.conn.commit()
+        return True
     
     def delete_task(self, task_id: int) -> bool:
         cursor = self.conn.cursor()
@@ -138,7 +209,11 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if row:
+            task = dict(row)
+            task['tags'] = json.loads(task.get('tags', '[]'))
+            return task
+        return None
     
     def get_all_tasks(self, category: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
         cursor = self.conn.cursor()
@@ -150,26 +225,45 @@ class Database:
         if status:
             query += " AND status = ?"
             params.append(status)
-        query += " ORDER BY priority DESC, deadline ASC, created_at DESC"
+        query += " ORDER BY position ASC, priority DESC, deadline ASC, created_at DESC"
         cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+        tasks = []
+        for row in cursor.fetchall():
+            task = dict(row)
+            task['tags'] = json.loads(task.get('tags', '[]'))
+            tasks.append(task)
+        return tasks
     
     def get_tasks_by_deadline(self, deadline: str) -> List[Dict]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM tasks WHERE deadline = ? AND status != 'completado'", (deadline,))
-        return [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT * FROM tasks WHERE deadline = ? AND status != 'completado' ORDER BY position ASC",
+            (deadline,)
+        )
+        tasks = []
+        for row in cursor.fetchall():
+            task = dict(row)
+            task['tags'] = json.loads(task.get('tags', '[]'))
+            tasks.append(task)
+        return tasks
     
     def get_tasks_with_deadlines(self) -> List[Dict]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM tasks WHERE deadline IS NOT NULL AND status != 'completado'")
-        return [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT * FROM tasks WHERE deadline IS NOT NULL AND status != 'completado' ORDER BY deadline ASC"
+        )
+        tasks = []
+        for row in cursor.fetchall():
+            task = dict(row)
+            task['tags'] = json.loads(task.get('tags', '[]'))
+            tasks.append(task)
+        return tasks
     
     def get_today_tasks(self) -> List[Dict]:
         today = datetime.now().strftime("%Y-%m-%d")
         return self.get_tasks_by_deadline(today)
     
     def get_tomorrow_tasks(self) -> List[Dict]:
-        from datetime import timedelta
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         return self.get_tasks_by_deadline(tomorrow)
     
@@ -180,12 +274,22 @@ class Database:
             SELECT * FROM tasks WHERE title LIKE ? OR description LIKE ?
             ORDER BY created_at DESC
         """, (search_pattern, search_pattern))
-        return [dict(row) for row in cursor.fetchall()]
+        tasks = []
+        for row in cursor.fetchall():
+            task = dict(row)
+            task['tags'] = json.loads(task.get('tags', '[]'))
+            tasks.append(task)
+        return tasks
+    
+    def move_task_to_date(self, task_id: int, new_deadline: str) -> bool:
+        return self.update_task(task_id, deadline=new_deadline)
     
     def add_quick_note(self, title: str, content: str = "", file_path: Optional[str] = None) -> int:
         cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO quick_notes (title, content, file_path) VALUES (?, ?, ?)",
-                      (title, content, file_path))
+        cursor.execute(
+            "INSERT INTO quick_notes (title, content, file_path) VALUES (?, ?, ?)",
+            (title, content, file_path)
+        )
         self.conn.commit()
         return cursor.lastrowid
     
@@ -206,22 +310,33 @@ class Database:
         self.conn.commit()
         return cursor.rowcount > 0
     
+    def get_quick_note(self, note_id: int) -> Optional[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM quick_notes WHERE id = ?", (note_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
     def get_all_quick_notes(self) -> List[Dict]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM quick_notes ORDER BY updated_at DESC")
         return [dict(row) for row in cursor.fetchall()]
     
-    def start_pomodoro(self, task_id: Optional[int] = None, duration: int = 25, session_type: str = "work") -> int:
+    def start_pomodoro(self, task_id: Optional[int] = None, duration: int = 25, 
+                       session_type: str = "work") -> int:
         cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type) VALUES (?, ?, ?)",
-                      (task_id, duration, session_type))
+        cursor.execute(
+            "INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type) VALUES (?, ?, ?)",
+            (task_id, duration, session_type)
+        )
         self.conn.commit()
         return cursor.lastrowid
     
     def complete_pomodoro(self, session_id: int) -> bool:
         cursor = self.conn.cursor()
-        cursor.execute("UPDATE pomodoro_sessions SET completed = 1, ended_at = ? WHERE id = ?",
-                      (datetime.now().isoformat(), session_id))
+        cursor.execute(
+            "UPDATE pomodoro_sessions SET completed = 1, ended_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), session_id)
+        )
         self.conn.commit()
         self._update_daily_stats_pomodoro()
         return cursor.rowcount > 0
@@ -229,7 +344,10 @@ class Database:
     def get_today_pomodoros(self) -> List[Dict]:
         today = datetime.now().strftime("%Y-%m-%d")
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM pomodoro_sessions WHERE date(started_at) = ? AND completed = 1", (today,))
+        cursor.execute(
+            "SELECT * FROM pomodoro_sessions WHERE date(started_at) = ? AND completed = 1",
+            (today,)
+        )
         return [dict(row) for row in cursor.fetchall()]
     
     def _update_daily_stats_pomodoro(self):
@@ -237,7 +355,9 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO statistics (date, pomodoros_completed, total_focus_minutes) VALUES (?, 1, 25)
-            ON CONFLICT(date) DO UPDATE SET pomodoros_completed = pomodoros_completed + 1, total_focus_minutes = total_focus_minutes + 25
+            ON CONFLICT(date) DO UPDATE SET 
+                pomodoros_completed = pomodoros_completed + 1, 
+                total_focus_minutes = total_focus_minutes + 25
         """, (today,))
         self.conn.commit()
     
@@ -250,8 +370,15 @@ class Database:
         """, (today,))
         self.conn.commit()
     
+    def get_daily_stats(self, date: str) -> Dict:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM statistics WHERE date = ?", (date,))
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+        return {'tasks_completed': 0, 'pomodoros_completed': 0, 'total_focus_minutes': 0}
+    
     def get_weekly_stats(self) -> Dict:
-        from datetime import timedelta
         today = datetime.now()
         week_start = today - timedelta(days=today.weekday())
         cursor = self.conn.cursor()
@@ -262,7 +389,11 @@ class Database:
             FROM statistics WHERE date >= ?
         """, (week_start.strftime("%Y-%m-%d"),))
         row = cursor.fetchone()
-        return {'tasks_completed': row['tasks'], 'pomodoros_completed': row['pomodoros'], 'total_focus_minutes': row['focus_minutes']}
+        return {
+            'tasks_completed': row['tasks'],
+            'pomodoros_completed': row['pomodoros'],
+            'total_focus_minutes': row['focus_minutes']
+        }
     
     def get_monthly_stats(self) -> Dict:
         today = datetime.now()
@@ -275,7 +406,18 @@ class Database:
             FROM statistics WHERE date >= ?
         """, (month_start.strftime("%Y-%m-%d"),))
         row = cursor.fetchone()
-        return {'tasks_completed': row['tasks'], 'pomodoros_completed': row['pomodoros'], 'total_focus_minutes': row['focus_minutes']}
+        return {
+            'tasks_completed': row['tasks'],
+            'pomodoros_completed': row['pomodoros'],
+            'total_focus_minutes': row['focus_minutes']
+        }
+    
+    def get_stats_range(self, start_date: str, end_date: str) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM statistics WHERE date >= ? AND date <= ? ORDER BY date ASC
+        """, (start_date, end_date))
+        return [dict(row) for row in cursor.fetchall()]
     
     def get_setting(self, key: str, default: Any = None) -> Any:
         cursor = self.conn.cursor()
@@ -291,16 +433,42 @@ class Database:
     def set_setting(self, key: str, value: Any):
         cursor = self.conn.cursor()
         value_str = json.dumps(value) if not isinstance(value, str) else value
-        cursor.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
-                      (key, value_str, value_str))
+        cursor.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
+            (key, value_str, value_str)
+        )
         self.conn.commit()
     
-    def add_schedule_event(self, title: str, day_of_week: int, start_time: str, end_time: str, color: str = "66, 133, 244") -> int:
+    def get_all_settings(self) -> Dict[str, Any]:
         cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color) VALUES (?, ?, ?, ?, ?)",
-                      (title, day_of_week, start_time, end_time, color))
+        cursor.execute("SELECT key, value FROM settings")
+        settings = {}
+        for row in cursor.fetchall():
+            try:
+                settings[row['key']] = json.loads(row['value'])
+            except json.JSONDecodeError:
+                settings[row['key']] = row['value']
+        return settings
+    
+    def add_schedule_event(self, title: str, day_of_week: int, start_time: str, 
+                          end_time: str, color: str = "66, 133, 244") -> int:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color) VALUES (?, ?, ?, ?, ?)",
+            (title, day_of_week, start_time, end_time, color)
+        )
         self.conn.commit()
         return cursor.lastrowid
+    
+    def update_schedule_event(self, event_id: int, **kwargs) -> bool:
+        if not kwargs:
+            return False
+        set_clause = ", ".join([f"{k} = ?" for k in kwargs.keys()])
+        values = list(kwargs.values()) + [event_id]
+        cursor = self.conn.cursor()
+        cursor.execute(f"UPDATE schedule_events SET {set_clause} WHERE id = ?", values)
+        self.conn.commit()
+        return cursor.rowcount > 0
     
     def get_schedule_events(self, day_of_week: Optional[int] = None) -> List[Dict]:
         cursor = self.conn.cursor()
@@ -316,10 +484,203 @@ class Database:
         self.conn.commit()
         return cursor.rowcount > 0
     
+    def add_reminder(self, task_id: int, remind_at: str, message: str = "") -> int:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO reminders (task_id, remind_at, message) VALUES (?, ?, ?)",
+            (task_id, remind_at, message)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+    
+    def get_pending_reminders(self) -> List[Dict]:
+        now = datetime.now().isoformat()
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT r.*, t.title as task_title, t.deadline as task_deadline
+            FROM reminders r
+            LEFT JOIN tasks t ON r.task_id = t.id
+            WHERE r.remind_at <= ? AND r.triggered = 0
+            ORDER BY r.remind_at ASC
+        """, (now,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_task_reminders(self, task_id: int) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM reminders WHERE task_id = ? ORDER BY remind_at ASC",
+            (task_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def mark_reminder_triggered(self, reminder_id: int) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE reminders SET triggered = 1 WHERE id = ?", (reminder_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def delete_reminder(self, reminder_id: int) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def delete_task_reminders(self, task_id: int) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM reminders WHERE task_id = ?", (task_id,))
+        self.conn.commit()
+        return True
+    
+    def export_to_json(self, filepath: Optional[str] = None) -> str:
+        if filepath is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = str(self.db_dir / f"export_{timestamp}.json")
+        
+        data = {
+            'exported_at': datetime.now().isoformat(),
+            'version': '1.0',
+            'tasks': self.get_all_tasks(),
+            'quick_notes': self.get_all_quick_notes(),
+            'schedule_events': self.get_schedule_events(),
+            'settings': self.get_all_settings(),
+            'statistics': self._get_all_statistics()
+        }
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        return filepath
+    
+    def export_tasks_to_csv(self, filepath: Optional[str] = None) -> str:
+        if filepath is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = str(self.db_dir / f"tasks_{timestamp}.csv")
+        
+        tasks = self.get_all_tasks()
+        if not tasks:
+            return filepath
+        
+        fieldnames = ['id', 'title', 'description', 'category', 'status', 
+                      'priority', 'deadline', 'tags', 'created_at', 'completed_at']
+        
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            for task in tasks:
+                task['tags'] = ','.join(task.get('tags', []))
+                writer.writerow(task)
+        
+        return filepath
+    
+    def import_from_json(self, filepath: str) -> Dict[str, int]:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        counts = {'tasks': 0, 'notes': 0, 'events': 0}
+        
+        for task in data.get('tasks', []):
+            self.add_task(
+                title=task['title'],
+                category=task['category'],
+                description=task.get('description', ''),
+                status=task.get('status', 'pendiente'),
+                priority=task.get('priority', 'media'),
+                deadline=task.get('deadline'),
+                tags=task.get('tags', [])
+            )
+            counts['tasks'] += 1
+        
+        for note in data.get('quick_notes', []):
+            self.add_quick_note(
+                title=note['title'],
+                content=note.get('content', ''),
+                file_path=note.get('file_path')
+            )
+            counts['notes'] += 1
+        
+        for event in data.get('schedule_events', []):
+            self.add_schedule_event(
+                title=event['title'],
+                day_of_week=event['day_of_week'],
+                start_time=event['start_time'],
+                end_time=event['end_time'],
+                color=event.get('color', '66, 133, 244')
+            )
+            counts['events'] += 1
+        
+        return counts
+    
+    def _get_all_statistics(self) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM statistics ORDER BY date DESC")
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def create_backup(self, backup_type: str = "manual") -> str:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"backup_{backup_type}_{timestamp}.db"
+        backup_path = self.backup_dir / backup_filename
+        
+        self.conn.close()
+        shutil.copy2(self.db_path, backup_path)
+        
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO backup_history (backup_path, backup_type) VALUES (?, ?)",
+            (str(backup_path), backup_type)
+        )
+        self.conn.commit()
+        
+        self._cleanup_old_backups()
+        
+        return str(backup_path)
+    
+    def _cleanup_old_backups(self, keep_count: int = 10):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT backup_path FROM backup_history 
+            ORDER BY created_at DESC 
+            LIMIT -1 OFFSET ?
+        """, (keep_count,))
+        
+        old_backups = cursor.fetchall()
+        for row in old_backups:
+            backup_path = Path(row['backup_path'])
+            if backup_path.exists():
+                backup_path.unlink()
+        
+        cursor.execute("""
+            DELETE FROM backup_history 
+            WHERE id NOT IN (
+                SELECT id FROM backup_history ORDER BY created_at DESC LIMIT ?
+            )
+        """, (keep_count,))
+        self.conn.commit()
+    
+    def restore_from_backup(self, backup_path: str) -> bool:
+        backup_file = Path(backup_path)
+        if not backup_file.exists():
+            return False
+        
+        self.create_backup(backup_type="pre_restore")
+        self.conn.close()
+        shutil.copy2(backup_file, self.db_path)
+        
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        
+        return True
+    
+    def get_backup_list(self) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM backup_history ORDER BY created_at DESC")
+        return [dict(row) for row in cursor.fetchall()]
+    
     def close(self):
         if self.conn:
             self.conn.close()
 
 
-# Create singleton instance lazily
 db = Database.get_instance()

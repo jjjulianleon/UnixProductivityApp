@@ -1,13 +1,19 @@
 """
-Notification Manager - Desktop notifications using notify-send
+Notification Manager - Desktop notifications and scheduled reminders
 """
 import subprocess
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict
+from pathlib import Path
+
+from PyQt6.QtCore import QTimer, QObject
+
+from .database import db
+from .signals import signals
 
 
-class NotificationManager:
-    """Handles desktop notifications"""
+class NotificationManager(QObject):
+    """Handles desktop notifications and scheduled reminders"""
     
     _instance = None
     
@@ -18,7 +24,34 @@ class NotificationManager:
         return cls._instance
     
     def __init__(self):
+        super().__init__()
         self.app_name = "UnixProductivityApp"
+        self.check_interval = 60000  # Check every minute
+        
+        # Timer for checking reminders
+        self.reminder_timer = QTimer()
+        self.reminder_timer.timeout.connect(self._check_reminders)
+        
+        # Timer for auto backup (every 6 hours)
+        self.backup_timer = QTimer()
+        self.backup_timer.timeout.connect(self._auto_backup)
+        self.backup_interval = 6 * 60 * 60 * 1000  # 6 hours
+    
+    def start(self):
+        """Start the notification manager timers"""
+        self.reminder_timer.start(self.check_interval)
+        self.backup_timer.start(self.backup_interval)
+        
+        # Check reminders immediately on start
+        self._check_reminders()
+        
+        # Check for deadline notifications
+        self._check_deadlines()
+    
+    def stop(self):
+        """Stop the notification manager timers"""
+        self.reminder_timer.stop()
+        self.backup_timer.stop()
     
     def send_notification(self, title: str, message: str, urgency: str = "normal",
                           icon: Optional[str] = None):
@@ -36,38 +69,89 @@ class NotificationManager:
         
         try:
             subprocess.run(cmd, check=True, capture_output=True)
-        except subprocess.CalledProcessError:
-            pass  # Silently fail if notify-send is not available
-        except FileNotFoundError:
-            pass  # notify-send not installed
+            signals.notification_triggered.emit(title, message, urgency)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
     
-    def notify_task_deadline(self, task_title: str, deadline: str, days_until: int):
+    def _check_reminders(self):
+        """Check for pending reminders and trigger notifications"""
+        pending = db.get_pending_reminders()
+        
+        for reminder in pending:
+            task_title = reminder.get('task_title', 'Tarea')
+            message = reminder.get('message') or f"Recordatorio para: {task_title}"
+            
+            self.send_notification(
+                "Recordatorio",
+                message,
+                "normal"
+            )
+            
+            # Mark as triggered
+            db.mark_reminder_triggered(reminder['id'])
+            signals.reminder_due.emit(reminder)
+    
+    def _check_deadlines(self):
+        """Check for tasks with upcoming deadlines"""
+        tasks = db.get_tasks_with_deadlines()
+        today = datetime.now().date()
+        
+        notified_today = db.get_setting('notified_deadlines_today', [])
+        current_date = today.strftime("%Y-%m-%d")
+        
+        # Reset notifications if it's a new day
+        if db.get_setting('last_notification_date') != current_date:
+            notified_today = []
+            db.set_setting('last_notification_date', current_date)
+        
+        for task in tasks:
+            if task['id'] in notified_today:
+                continue
+            
+            try:
+                deadline = datetime.strptime(task['deadline'], "%Y-%m-%d").date()
+                days_until = (deadline - today).days
+                
+                if days_until <= 3:
+                    self._notify_task_deadline(task, days_until)
+                    notified_today.append(task['id'])
+            except ValueError:
+                pass
+        
+        db.set_setting('notified_deadlines_today', notified_today)
+    
+    def _notify_task_deadline(self, task: Dict, days_until: int):
         """Send notification for upcoming task deadline"""
-        if days_until == 0:
+        task_title = task['title']
+        
+        if days_until < 0:
             urgency = "critical"
-            message = f"¡La tarea '{task_title}' vence HOY!"
+            message = f"La tarea '{task_title}' esta VENCIDA"
+        elif days_until == 0:
+            urgency = "critical"
+            message = f"La tarea '{task_title}' vence HOY"
         elif days_until == 1:
             urgency = "critical"
-            message = f"La tarea '{task_title}' vence MAÑANA"
+            message = f"La tarea '{task_title}' vence MANANA"
         elif days_until <= 3:
             urgency = "normal"
-            message = f"La tarea '{task_title}' vence en {days_until} días ({deadline})"
+            message = f"La tarea '{task_title}' vence en {days_until} dias"
         else:
             urgency = "low"
-            message = f"La tarea '{task_title}' vence el {deadline}"
+            message = f"La tarea '{task_title}' vence el {task['deadline']}"
         
-        self.send_notification("📅 Recordatorio de tarea", message, urgency)
+        self.send_notification("Deadline de tarea", message, urgency)
     
     def notify_pomodoro_complete(self, session_type: str = "work"):
         """Send notification when pomodoro is complete"""
         if session_type == "work":
-            title = "🍅 ¡Pomodoro completado!"
+            title = "Pomodoro completado"
             message = "Buen trabajo. Toma un descanso de 5 minutos."
         elif session_type == "short_break":
-            title = "☕ Descanso terminado"
+            title = "Descanso terminado"
             message = "Hora de volver al trabajo."
         else:
-            title = "🎉 ¡Descanso largo terminado!"
+            title = "Descanso largo terminado"
             message = "Hora de empezar un nuevo ciclo de pomodoros."
         
         self.send_notification(title, message, "normal")
@@ -75,27 +159,72 @@ class NotificationManager:
     def notify_task_completed(self, task_title: str):
         """Send notification when task is completed"""
         self.send_notification(
-            "✅ Tarea completada",
-            f"¡Felicidades! Has completado '{task_title}'",
+            "Tarea completada",
+            f"Has completado '{task_title}'",
             "normal"
         )
     
-    def check_upcoming_deadlines(self, tasks: list):
-        """Check for tasks with upcoming deadlines and send notifications"""
-        today = datetime.now().date()
-        
-        for task in tasks:
-            if task.get('deadline') and task.get('status') != 'completado':
-                try:
-                    deadline = datetime.strptime(task['deadline'], "%Y-%m-%d").date()
-                    days_until = (deadline - today).days
-                    
-                    # Notify for tasks due within 3 days
-                    if 0 <= days_until <= 3:
-                        self.notify_task_deadline(task['title'], task['deadline'], days_until)
-                except ValueError:
-                    pass  # Invalid date format
+    def notify_backup_completed(self, backup_path: str):
+        """Send notification when backup is completed"""
+        self.send_notification(
+            "Backup completado",
+            f"Base de datos respaldada exitosamente",
+            "low"
+        )
+    
+    def _auto_backup(self):
+        """Perform automatic backup"""
+        try:
+            backup_path = db.create_backup(backup_type="auto")
+            signals.backup_completed.emit(backup_path)
+        except Exception:
+            pass
+    
+    def schedule_reminder(self, task_id: int, remind_at: datetime, message: str = "") -> int:
+        """Schedule a reminder for a task"""
+        remind_at_str = remind_at.isoformat()
+        return db.add_reminder(task_id, remind_at_str, message)
+    
+    def schedule_deadline_reminders(self, task_id: int, deadline: str):
+        """Automatically schedule reminders for a task deadline"""
+        try:
+            deadline_date = datetime.strptime(deadline, "%Y-%m-%d")
+            
+            # Clear existing reminders for this task
+            db.delete_task_reminders(task_id)
+            
+            task = db.get_task(task_id)
+            task_title = task['title'] if task else "Tarea"
+            
+            # 3 days before at 9:00 AM
+            remind_3d = deadline_date - timedelta(days=3)
+            remind_3d = remind_3d.replace(hour=9, minute=0, second=0)
+            if remind_3d > datetime.now():
+                db.add_reminder(task_id, remind_3d.isoformat(), 
+                               f"'{task_title}' vence en 3 dias")
+            
+            # 1 day before at 9:00 AM
+            remind_1d = deadline_date - timedelta(days=1)
+            remind_1d = remind_1d.replace(hour=9, minute=0, second=0)
+            if remind_1d > datetime.now():
+                db.add_reminder(task_id, remind_1d.isoformat(), 
+                               f"'{task_title}' vence manana")
+            
+            # Same day at 8:00 AM
+            remind_same = deadline_date.replace(hour=8, minute=0, second=0)
+            if remind_same > datetime.now():
+                db.add_reminder(task_id, remind_same.isoformat(), 
+                               f"'{task_title}' vence HOY")
+        except ValueError:
+            pass
+    
+    def get_scheduled_reminders(self, task_id: int) -> List[Dict]:
+        """Get all scheduled reminders for a task"""
+        return db.get_task_reminders(task_id)
+    
+    def cancel_reminder(self, reminder_id: int) -> bool:
+        """Cancel a scheduled reminder"""
+        return db.delete_reminder(reminder_id)
 
 
-# Create singleton instance
 notification_manager = NotificationManager.get_instance()

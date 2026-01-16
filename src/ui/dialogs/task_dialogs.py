@@ -53,31 +53,31 @@ class AddTaskDialog(QDialog):
         layout.setSpacing(12)
         
         # Header
-        header = QLabel("➕ Nueva Tarea")
+        header = QLabel("Nueva Tarea")
         header.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
         header.setStyleSheet(f"color: rgb({COLORS['primary']}); background: transparent;")
         layout.addWidget(header)
         
         # Title
-        title_label = QLabel("Título *")
+        title_label = QLabel("Titulo *")
         title_label.setFont(QFont(FONT_FAMILY, 9))
         title_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
         layout.addWidget(title_label)
         
         self.title_input = QLineEdit()
-        self.title_input.setPlaceholderText("Título de la tarea...")
+        self.title_input.setPlaceholderText("Titulo de la tarea...")
         self.title_input.setFont(QFont(FONT_FAMILY, 10))
         self.title_input.setStyleSheet(get_input_style())
         layout.addWidget(self.title_input)
         
         # Description
-        desc_label = QLabel("Descripción")
+        desc_label = QLabel("Descripcion")
         desc_label.setFont(QFont(FONT_FAMILY, 9))
         desc_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
         layout.addWidget(desc_label)
         
         self.desc_input = QTextEdit()
-        self.desc_input.setPlaceholderText("Descripción opcional...")
+        self.desc_input.setPlaceholderText("Descripcion opcional...")
         self.desc_input.setFont(QFont(FONT_FAMILY, 10))
         self.desc_input.setStyleSheet(get_input_style())
         self.desc_input.setMaximumHeight(80)
@@ -88,7 +88,7 @@ class AddTaskDialog(QDialog):
         
         # Category
         cat_container = QVBoxLayout()
-        cat_label = QLabel("Categoría")
+        cat_label = QLabel("Categoria")
         cat_label.setFont(QFont(FONT_FAMILY, 9))
         cat_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
         cat_container.addWidget(cat_label)
@@ -122,14 +122,14 @@ class AddTaskDialog(QDialog):
         layout.addLayout(row1)
         
         # Deadline
-        deadline_label = QLabel("Fecha Límite")
+        deadline_label = QLabel("Fecha Limite")
         deadline_label.setFont(QFont(FONT_FAMILY, 9))
         deadline_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
         layout.addWidget(deadline_label)
         
         deadline_row = QHBoxLayout()
         
-        self.deadline_check = QPushButton("Sin fecha límite")
+        self.deadline_check = QPushButton("Sin fecha limite")
         self.deadline_check.setCheckable(True)
         self.deadline_check.setChecked(True)
         self.deadline_check.setFont(QFont(FONT_FAMILY, 9))
@@ -172,7 +172,7 @@ class AddTaskDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         
-        save_btn = QPushButton("💾 Guardar")
+        save_btn = QPushButton("Guardar")
         save_btn.setFont(QFont(FONT_FAMILY, 9))
         save_btn.setStyleSheet(get_button_style('primary'))
         save_btn.clicked.connect(self._save)
@@ -183,7 +183,7 @@ class AddTaskDialog(QDialog):
     def _toggle_deadline(self):
         has_deadline = not self.deadline_check.isChecked()
         self.deadline_date.setVisible(has_deadline)
-        self.deadline_check.setText("Sin fecha límite" if self.deadline_check.isChecked() else "Con fecha límite")
+        self.deadline_check.setText("Sin fecha limite" if self.deadline_check.isChecked() else "Con fecha limite")
     
     def _save(self):
         title = self.title_input.text().strip()
@@ -242,7 +242,7 @@ class TaskDetailDialog(QDialog):
         category = self.task.get('category', '')
         color = get_category_color(category)
         
-        cat_label = QLabel(f"● {category}")
+        cat_label = QLabel(f"[{category}]")
         cat_label.setFont(QFont(FONT_FAMILY, 9))
         cat_label.setStyleSheet(f"color: rgb({color}); background: transparent;")
         layout.addWidget(cat_label)
@@ -313,7 +313,7 @@ class TaskDetailDialog(QDialog):
         
         priority_row = QHBoxLayout()
         priority_row.addWidget(self._info_label("Prioridad:"))
-        priority_val = QLabel(f"● {priority.capitalize()}")
+        priority_val = QLabel(f"[{priority.upper()[0]}] {priority.capitalize()}")
         priority_val.setFont(QFont(FONT_FAMILY, 10))
         priority_val.setStyleSheet(f"color: rgb({priority_color}); background: transparent;")
         priority_row.addWidget(priority_val)
@@ -329,13 +329,13 @@ class TaskDetailDialog(QDialog):
                 deadline_color = get_deadline_color(days_until)
                 
                 if days_until < 0:
-                    deadline_text = f"⚠️ Vencido ({deadline_date.strftime('%d/%m/%Y')})"
+                    deadline_text = f"VENCIDO ({deadline_date.strftime('%d/%m/%Y')})"
                 elif days_until == 0:
-                    deadline_text = f"📅 Hoy"
+                    deadline_text = "Hoy"
                 elif days_until == 1:
-                    deadline_text = f"📅 Mañana"
+                    deadline_text = "Manana"
                 else:
-                    deadline_text = f"📅 {deadline_date.strftime('%d/%m/%Y')} ({days_until} días)"
+                    deadline_text = f"{deadline_date.strftime('%d/%m/%Y')} ({days_until} dias)"
                 
                 deadline_row = QHBoxLayout()
                 deadline_row.addWidget(self._info_label("Deadline:"))
@@ -355,16 +355,16 @@ class TaskDetailDialog(QDialog):
         btn_layout = QHBoxLayout()
         
         if self.task.get('status') != 'completado':
-            complete_btn = QPushButton("✓ Completar")
+            complete_btn = QPushButton("Completar")
             complete_btn.setFont(QFont(FONT_FAMILY, 9))
             complete_btn.setStyleSheet(get_button_style('success'))
             complete_btn.clicked.connect(self._complete_task)
             btn_layout.addWidget(complete_btn)
         
-        delete_btn = QPushButton("🗑️")
+        delete_btn = QPushButton("Eliminar")
         delete_btn.setFont(QFont(FONT_FAMILY, 9))
         delete_btn.setStyleSheet(get_button_style('danger'))
-        delete_btn.setFixedWidth(40)
+        delete_btn.setFixedWidth(70)
         delete_btn.clicked.connect(self._delete_task)
         btn_layout.addWidget(delete_btn)
         
@@ -434,13 +434,13 @@ class DeadlineTasksDialog(QDialog):
             if deadline:
                 try:
                     deadline_date = datetime.strptime(deadline, "%Y-%m-%d")
-                    header_text = f"📅 {deadline_date.strftime('%d/%m/%Y')}"
+                    header_text = f"Tareas - {deadline_date.strftime('%d/%m/%Y')}"
                 except:
-                    header_text = "📅 Tareas"
+                    header_text = "Tareas"
             else:
-                header_text = "📅 Tareas"
+                header_text = "Tareas"
         else:
-            header_text = "📅 Tareas"
+            header_text = "Tareas"
         
         header = QLabel(header_text)
         header.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))

@@ -16,6 +16,7 @@ from src.utils.styles import (
 from src.utils.constants import DAYS_ES
 from src.core.task_manager import task_manager
 from src.core.database import db
+from src.core.signals import SignalHub
 from src.ui.widgets.common import TaskCard, StatCard, SectionHeader, EmptyState
 from src.ui.widgets.pomodoro import MiniPomodoro
 
@@ -27,11 +28,17 @@ class DashboardView(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.signals = SignalHub.get_instance()
         self.setup_ui()
         self._load_data()
-        
-        # Connect to task updates
-        # task_manager.tasks_updated.connect(self._load_data)
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.task_added.connect(self._load_data)
+        self.signals.task_updated.connect(self._load_data)
+        self.signals.task_deleted.connect(self._load_data)
+        self.signals.pomodoro_completed.connect(self._on_pomodoro_signal)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -53,7 +60,7 @@ class DashboardView(QWidget):
         header_layout.addStretch()
         
         # Today button
-        today_btn = QPushButton("📅 Hoy")
+        today_btn = QPushButton("Hoy")
         today_btn.setFont(QFont(FONT_FAMILY, 10))
         today_btn.setStyleSheet(get_button_style('primary'))
         header_layout.addWidget(today_btn)
@@ -76,16 +83,16 @@ class DashboardView(QWidget):
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(16)
         
-        self.today_tasks_stat = StatCard("Tareas Hoy", "0", "📋", COLORS['danger'])
+        self.today_tasks_stat = StatCard("Tareas Hoy", "0", "", COLORS['danger'])
         stats_layout.addWidget(self.today_tasks_stat)
         
-        self.in_progress_stat = StatCard("En Progreso", "0", "🔄", COLORS['primary'])
+        self.in_progress_stat = StatCard("En Progreso", "0", "", COLORS['primary'])
         stats_layout.addWidget(self.in_progress_stat)
         
-        self.week_completed_stat = StatCard("Completadas (Semana)", "0", "✅", COLORS['success'])
+        self.week_completed_stat = StatCard("Completadas (Semana)", "0", "", COLORS['success'])
         stats_layout.addWidget(self.week_completed_stat)
         
-        self.pomodoros_stat = StatCard("Pomodoros Hoy", "0", "🍅", COLORS['danger'])
+        self.pomodoros_stat = StatCard("Pomodoros Hoy", "0", "", COLORS['danger'])
         stats_layout.addWidget(self.pomodoros_stat)
         
         content_layout.addLayout(stats_layout)
@@ -99,7 +106,7 @@ class DashboardView(QWidget):
         left_column.setSpacing(16)
         
         # Today's deadlines section
-        today_header = SectionHeader("🔴 Deadlines de Hoy", "Ver todas", "→")
+        today_header = SectionHeader("Deadlines de Hoy", "Ver todas", ">")
         left_column.addWidget(today_header)
         
         self.today_tasks_container = QWidget()
@@ -109,7 +116,7 @@ class DashboardView(QWidget):
         left_column.addWidget(self.today_tasks_container)
         
         # In progress section
-        progress_header = SectionHeader("🔄 En Progreso")
+        progress_header = SectionHeader("En Progreso")
         left_column.addWidget(progress_header)
         
         self.progress_tasks_container = QWidget()
@@ -119,7 +126,7 @@ class DashboardView(QWidget):
         left_column.addWidget(self.progress_tasks_container)
         
         # Upcoming deadlines
-        upcoming_header = SectionHeader("📅 Próximos Deadlines (7 días)")
+        upcoming_header = SectionHeader("Proximos Deadlines (7 dias)")
         left_column.addWidget(upcoming_header)
         
         self.upcoming_container = QWidget()
@@ -155,7 +162,7 @@ class DashboardView(QWidget):
         right_column.addWidget(pomodoro_frame)
         
         # Overdue tasks
-        overdue_header = SectionHeader("⚠️ Tareas Vencidas")
+        overdue_header = SectionHeader("Tareas Vencidas")
         right_column.addWidget(overdue_header)
         
         self.overdue_container = QWidget()
@@ -174,11 +181,11 @@ class DashboardView(QWidget):
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
     
-    def _load_data(self):
+    def _load_data(self, *args):
         """Load all dashboard data"""
         # Today's tasks
         today_tasks = task_manager.get_today_tasks()
-        self._populate_task_list(self.today_tasks_layout, today_tasks, "Sin deadlines para hoy 🎉")
+        self._populate_task_list(self.today_tasks_layout, today_tasks, "Sin deadlines para hoy")
         
         # In progress tasks
         in_progress = task_manager.get_in_progress_tasks()
@@ -189,11 +196,11 @@ class DashboardView(QWidget):
         # Exclude today's tasks
         today = datetime.now().strftime("%Y-%m-%d")
         upcoming = [t for t in upcoming if t.get('deadline') != today][:5]
-        self._populate_task_list(self.upcoming_layout, upcoming, "Sin deadlines próximos")
+        self._populate_task_list(self.upcoming_layout, upcoming, "Sin deadlines proximos")
         
         # Overdue tasks
         overdue = task_manager.get_overdue_tasks()
-        self._populate_task_list(self.overdue_layout, overdue[:5], "Sin tareas vencidas ✅")
+        self._populate_task_list(self.overdue_layout, overdue[:5], "Sin tareas vencidas")
         
         # Update stats
         self.today_tasks_stat.update_value(str(len(today_tasks)))
@@ -212,7 +219,7 @@ class DashboardView(QWidget):
                 item.widget().deleteLater()
         
         if not tasks:
-            empty = EmptyState(empty_msg, "📭")
+            empty = EmptyState(empty_msg)
             layout.addWidget(empty)
             return
         
@@ -225,6 +232,10 @@ class DashboardView(QWidget):
         """Handle pomodoro completion"""
         if session_type == 'work':
             self._load_data()
+    
+    def _on_pomodoro_signal(self, data: dict):
+        """Handle pomodoro signal from hub"""
+        self._load_data()
     
     def refresh(self):
         """Refresh dashboard data"""

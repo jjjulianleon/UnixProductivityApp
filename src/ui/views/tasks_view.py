@@ -15,6 +15,7 @@ from src.utils.styles import (
 )
 from src.utils.constants import TASK_CATEGORIES
 from src.core.task_manager import task_manager
+from src.core.signals import SignalHub
 from src.ui.widgets.kanban import KanbanBoard
 from src.ui.dialogs.task_dialogs import AddTaskDialog, TaskDetailDialog
 
@@ -24,6 +25,7 @@ class TasksView(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.signals = SignalHub.get_instance()
         self.current_category = None
         self.search_timer = QTimer()
         self.search_timer.setSingleShot(True)
@@ -31,9 +33,13 @@ class TasksView(QWidget):
         
         self.setup_ui()
         self._load_tasks()
-        
-        # Connect to updates
-        # task_manager.tasks_updated.connect(self._load_tasks)
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.task_added.connect(self._load_tasks)
+        self.signals.task_updated.connect(self._load_tasks)
+        self.signals.task_deleted.connect(self._load_tasks)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -43,7 +49,7 @@ class TasksView(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        title = QLabel("📋 Tareas")
+        title = QLabel("Tareas")
         title.setFont(QFont(FONT_FAMILY, 18, QFont.Weight.Bold))
         title.setStyleSheet(f"color: rgb({COLORS['text_primary']}); background: transparent;")
         header_layout.addWidget(title)
@@ -52,7 +58,7 @@ class TasksView(QWidget):
         
         # Search
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Buscar tareas...")
+        self.search_input.setPlaceholderText("Buscar tareas...")
         self.search_input.setFont(QFont(FONT_FAMILY, 10))
         self.search_input.setStyleSheet(get_input_style())
         self.search_input.setFixedWidth(250)
@@ -61,7 +67,7 @@ class TasksView(QWidget):
         
         # Category filter
         self.category_filter = QComboBox()
-        self.category_filter.addItem("Todas las categorías")
+        self.category_filter.addItem("Todas las categorias")
         self.category_filter.addItems(TASK_CATEGORIES)
         self.category_filter.setFont(QFont(FONT_FAMILY, 10))
         self.category_filter.setStyleSheet(get_combobox_style())
@@ -85,7 +91,7 @@ class TasksView(QWidget):
         self.kanban.add_task_requested.connect(self._add_task_with_status)
         layout.addWidget(self.kanban, 1)
     
-    def _load_tasks(self):
+    def _load_tasks(self, *args):
         """Load and display tasks"""
         if self.current_category:
             tasks = task_manager.get_tasks_by_category(self.current_category)
@@ -112,7 +118,7 @@ class TasksView(QWidget):
     
     def _on_filter_changed(self, text: str):
         """Handle category filter change"""
-        if text == "Todas las categorías":
+        if text == "Todas las categorias":
             self.current_category = None
         else:
             self.current_category = text
@@ -173,7 +179,8 @@ class TasksView(QWidget):
             description=task.get('description', ''),
             status=task.get('status', 'pendiente'),
             priority=task.get('priority', 'media'),
-            deadline=task.get('deadline')
+            deadline=task.get('deadline'),
+            tags=task.get('tags', [])
         )
     
     def refresh(self):

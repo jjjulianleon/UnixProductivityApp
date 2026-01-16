@@ -10,6 +10,7 @@ from PyQt6.QtGui import QFont
 
 from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_tab_style
 from src.core.task_manager import task_manager
+from src.core.signals import SignalHub
 from src.ui.widgets.calendar import MonthlyCalendar
 from src.ui.widgets.schedule import WeeklySchedule
 from src.ui.dialogs.task_dialogs import TaskDetailDialog, DeadlineTasksDialog
@@ -20,11 +21,16 @@ class CalendarView(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.signals = SignalHub.get_instance()
         self.setup_ui()
         self._sync_deadlines()
-        
-        # Connect to updates
-        # task_manager.tasks_updated.connect(self._sync_deadlines)
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.task_added.connect(self._sync_deadlines)
+        self.signals.task_updated.connect(self._sync_deadlines)
+        self.signals.task_deleted.connect(self._sync_deadlines)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -34,7 +40,7 @@ class CalendarView(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        title = QLabel("📅 Calendario")
+        title = QLabel("Calendario")
         title.setFont(QFont(FONT_FAMILY, 18, QFont.Weight.Bold))
         title.setStyleSheet(f"color: rgb({COLORS['text_primary']}); background: transparent;")
         header_layout.addWidget(title)
@@ -58,15 +64,15 @@ class CalendarView(QWidget):
         # Monthly calendar
         self.monthly = MonthlyCalendar()
         self.monthly.deadline_clicked.connect(self._on_deadline_clicked)
-        self.tabs.addTab(self.monthly, "📆 Mes")
+        self.tabs.addTab(self.monthly, "Mes")
         
         # Weekly schedule
         self.weekly = WeeklySchedule()
-        self.tabs.addTab(self.weekly, "📋 Semana")
+        self.tabs.addTab(self.weekly, "Semana")
         
         layout.addWidget(self.tabs, 1)
     
-    def _sync_deadlines(self):
+    def _sync_deadlines(self, *args):
         """Sync deadlines from tasks to calendar"""
         tasks = task_manager.get_tasks_with_deadlines()
         self.monthly.set_deadlines(tasks)

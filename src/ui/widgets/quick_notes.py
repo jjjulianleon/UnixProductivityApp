@@ -18,6 +18,7 @@ from src.utils.styles import (
 )
 from src.core.database import db
 from src.core.obsidian_sync import ObsidianSync
+from src.core.signals import SignalHub
 
 
 class QuickNoteDialog(QDialog):
@@ -27,7 +28,7 @@ class QuickNoteDialog(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Nueva Nota Rápida")
+        self.setWindowTitle("Nueva Nota Rapida")
         self.setFixedSize(400, 300)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -50,14 +51,14 @@ class QuickNoteDialog(QDialog):
         layout.setSpacing(12)
         
         # Header
-        header = QLabel("📝 Nueva Nota Rápida")
+        header = QLabel("Nueva Nota Rapida")
         header.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
         header.setStyleSheet(f"color: rgb({COLORS['primary']}); background: transparent;")
         layout.addWidget(header)
         
         # Title input
         self.title_input = QLineEdit()
-        self.title_input.setPlaceholderText("Título de la nota...")
+        self.title_input.setPlaceholderText("Titulo de la nota...")
         self.title_input.setFont(QFont(FONT_FAMILY, 10))
         self.title_input.setStyleSheet(get_input_style())
         layout.addWidget(self.title_input)
@@ -78,7 +79,7 @@ class QuickNoteDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         
-        save_btn = QPushButton("💾 Guardar")
+        save_btn = QPushButton("Guardar")
         save_btn.setFont(QFont(FONT_FAMILY, 9))
         save_btn.setStyleSheet(get_button_style('primary'))
         save_btn.clicked.connect(self._save)
@@ -124,7 +125,7 @@ class QuickNoteCard(QFrame):
         layout.setSpacing(4)
         
         # Title
-        title = QLabel(self.note.get('title', 'Sin título'))
+        title = QLabel(self.note.get('title', 'Sin titulo'))
         title.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         title.setStyleSheet(f"color: rgb({COLORS['warning']}); background: transparent;")
         title.setWordWrap(True)
@@ -160,10 +161,18 @@ class QuickNotesWidget(QWidget):
     def __init__(self, compact: bool = False, parent=None):
         super().__init__(parent)
         self.compact = compact
+        self.signals = SignalHub.get_instance()
         self.obsidian = ObsidianSync()
         
         self.setup_ui()
         self._load_notes()
+        self._connect_signals()
+    
+    def _connect_signals(self):
+        """Connect to signal hub"""
+        self.signals.note_added.connect(self._load_notes)
+        self.signals.note_updated.connect(self._load_notes)
+        self.signals.note_deleted.connect(self._load_notes)
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -174,7 +183,7 @@ class QuickNotesWidget(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        title = QLabel("📝 Notas Rápidas")
+        title = QLabel("Notas Rapidas")
         title.setFont(QFont(FONT_FAMILY, 11 if self.compact else 12, QFont.Weight.Bold))
         title.setStyleSheet(f"color: rgb({COLORS['warning']}); background: transparent;")
         header_layout.addWidget(title)
@@ -206,7 +215,7 @@ class QuickNotesWidget(QWidget):
         scroll.setWidget(self.notes_widget)
         layout.addWidget(scroll, 1)
     
-    def _load_notes(self):
+    def _load_notes(self, *args):
         """Load notes from database and Obsidian"""
         # Clear existing
         while self.notes_layout.count() > 1:
@@ -246,7 +255,7 @@ class QuickNotesWidget(QWidget):
         
         if not all_notes:
             from .common import EmptyState
-            empty = EmptyState("Sin notas", "📝")
+            empty = EmptyState("Sin notas")
             self.notes_layout.insertWidget(0, empty)
     
     def _add_note(self):
@@ -262,6 +271,9 @@ class QuickNotesWidget(QWidget):
         
         # Save to database
         db.add_quick_note(title, content, file_path)
+        
+        # Emit signal
+        self.signals.note_added.emit({'title': title, 'content': content})
         
         # Refresh
         self._load_notes()

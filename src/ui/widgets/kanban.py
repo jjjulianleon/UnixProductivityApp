@@ -1,5 +1,5 @@
 """
-Kanban Board Widget
+Kanban Board Widget with improved drag & drop
 """
 import json
 from typing import List, Dict, Optional
@@ -12,13 +12,14 @@ from PyQt6.QtGui import QFont, QDragEnterEvent, QDropEvent
 
 from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_scroll_area_style
 from src.utils.constants import TASK_STATUSES
+from src.core.task_manager import task_manager
 from .common import DraggableTaskCard, EmptyState
 
 
 class KanbanColumn(QFrame):
-    """Single column in Kanban board"""
+    """Single column in Kanban board with reordering support"""
     
-    task_dropped = pyqtSignal(dict, str)  # task, new_status
+    task_dropped = pyqtSignal(dict, str, int)  # task, new_status, position
     task_clicked = pyqtSignal(dict)
     add_task_requested = pyqtSignal(str)  # status
     
@@ -48,7 +49,8 @@ class KanbanColumn(QFrame):
         # Header
         header_layout = QHBoxLayout()
         
-        title_label = QLabel(f"● {self.title}")
+        # Status indicator (circle instead of emoji)
+        title_label = QLabel(f"[{self.title}]")
         title_label.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
         title_label.setStyleSheet(f"color: rgb({self.color}); background: transparent;")
         header_layout.addWidget(title_label)
@@ -95,6 +97,7 @@ class KanbanColumn(QFrame):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         self.tasks_widget = QWidget()
+        self.tasks_widget.setAcceptDrops(True)
         self.tasks_layout = QVBoxLayout(self.tasks_widget)
         self.tasks_layout.setContentsMargins(0, 0, 4, 0)
         self.tasks_layout.setSpacing(6)
@@ -113,8 +116,9 @@ class KanbanColumn(QFrame):
             if item.widget():
                 item.widget().deleteLater()
         
-        # Add new cards
-        for task in tasks:
+        # Add new cards with position tracking
+        for idx, task in enumerate(tasks):
+            task['_position'] = idx
             card = DraggableTaskCard(task, compact=True)
             card.clicked.connect(self.task_clicked.emit)
             self.tasks_layout.insertWidget(self.tasks_layout.count() - 1, card)
@@ -124,11 +128,21 @@ class KanbanColumn(QFrame):
         
         # Show empty state if no tasks
         if not tasks:
-            empty = EmptyState("Sin tareas", "📝")
+            empty = EmptyState("Sin tareas")
             self.tasks_layout.insertWidget(0, empty)
     
+    def _get_drop_position(self, y_pos: int) -> int:
+        """Calculate drop position based on Y coordinate"""
+        for i in range(self.tasks_layout.count() - 1):  # -1 to skip stretch
+            widget = self.tasks_layout.itemAt(i).widget()
+            if widget and isinstance(widget, DraggableTaskCard):
+                widget_center = widget.y() + widget.height() // 2
+                if y_pos < widget_center:
+                    return i
+        return len(self.tasks)
+    
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-task"):
             event.acceptProposedAction()
             self.setStyleSheet(f"""
                 QFrame {{
@@ -137,6 +151,10 @@ class KanbanColumn(QFrame):
                     border-radius: 10px;
                 }}
             """)
+    
+    def dragMoveEvent(self, event):
+        """Track drag position for reordering"""
+        event.acceptProposedAction()
     
     def dragLeaveEvent(self, event):
         self.setStyleSheet(f"""
@@ -157,18 +175,28 @@ class KanbanColumn(QFrame):
         """)
         
         try:
-            task_json = event.mimeData().text()
+            # Get task data
+            if event.mimeData().hasFormat("application/x-task"):
+                task_json = event.mimeData().data("application/x-task").data().decode()
+            else:
+                task_json = event.mimeData().text()
+            
             task = json.loads(task_json)
-            self.task_dropped.emit(task, self.status)
+            
+            # Calculate drop position
+            drop_pos = self._get_drop_position(event.position().toPoint().y())
+            
+            self.task_dropped.emit(task, self.status, drop_pos)
             event.acceptProposedAction()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, Exception) as e:
             event.ignore()
 
 
 class KanbanBoard(QWidget):
-    """Full Kanban board with three columns"""
+    """Full Kanban board with three columns and reordering"""
     
     task_status_changed = pyqtSignal(dict, str)
+    task_position_changed = pyqtSignal(dict, str, int)
     task_clicked = pyqtSignal(dict)
     add_task_requested = pyqtSignal(str)
     
@@ -200,12 +228,21 @@ class KanbanBoard(QWidget):
             self.columns[status] = column
             layout.addWidget(column, 1)
     
-    def _on_task_dropped(self, task: Dict, new_status: str):
-        """Handle task drop"""
-        self.task_status_changed.emit(task, new_status)
+    def _on_task_dropped(self, task: Dict, new_status: str, position: int):
+        """Handle task drop with position"""
+        old_status = task.get('status', 'pendiente')
+        task_id = task.get('id')
+        
+        if old_status != new_status:
+            # Status changed - emit status change
+            self.task_status_changed.emit(task, new_status)
+        
+        # Update position
+        if task_id:
+            task_manager.update_task_position(task_id, new_status, position)
     
     def set_tasks(self, tasks: List[Dict]):
-        """Distribute tasks to columns"""
+        """Distribute tasks to columns, sorted by position"""
         by_status = {
             "pendiente": [],
             "en progreso": [],
@@ -216,6 +253,10 @@ class KanbanBoard(QWidget):
             status = task.get('status', 'pendiente')
             if status in by_status:
                 by_status[status].append(task)
+        
+        # Sort each status by position
+        for status in by_status:
+            by_status[status].sort(key=lambda t: t.get('position', 999))
         
         for status, column in self.columns.items():
             column.set_tasks(by_status.get(status, []))
