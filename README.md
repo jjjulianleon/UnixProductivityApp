@@ -1,101 +1,119 @@
-# Glassmorphism Calendar Widget
+# UnixProductivityApp
 
-Widget de escritorio flotante con efecto glassmorphism para KDE Plasma.
+A productivity desktop application for Linux (KDE Plasma) with calendar, task management, Pomodoro timer, and Obsidian integration.
 
-## ✨ Características
+## Features
 
-- **Vista Mensual**: Calendario del mes con el día actual resaltado
-- **Vista Semanal**: Horario estilo Microsoft Teams con tus clases
-- **Integración Obsidian**: Muestra pendientes de tus notas
-- **Glassmorphism**: Fondo semitransparente con bordes redondeados
-- **Arrastrable**: Mueve el widget a cualquier lugar de la pantalla
+### Main Application
+- 🏠 **Dashboard** - Today's overview with upcoming deadlines and tasks
+- 📋 **Kanban Board** - Drag & drop task management (Pendiente → En Progreso → Completado)
+- 📅 **Calendar** - Monthly calendar with deadline indicators + weekly schedule
+- 📝 **Quick Notes** - Fast notes synced with Obsidian Rough Notes
+- 🍅 **Pomodoro Timer** - 25/5 productivity timer with statistics
+- 📈 **Statistics** - Weekly/monthly productivity tracking
+- 🔔 **Notifications** - Desktop alerts for upcoming deadlines
+- ⌨️ **Keyboard Shortcuts** - Ctrl+1-5 for navigation, Ctrl+N for new task
 
-## 🚀 Instalación
+### Desktop Widget (520x320)
+- Compact calendar with deadline dots
+- Weekly schedule view
+- Mini Kanban with pending/in-progress tasks
+- Today/Tomorrow deadlines list
+- Mini Pomodoro timer
+- Quick note button
+- Draggable, stays on desktop
 
-```bash
-# 1. Instalar dependencias
-pip install PyQt6 requests
+### Obsidian Integration
+- Bidirectional sync with markdown files
+- Supports:
+  - Personal: `~/Documents/Obsidian/Personal/Pendientes Personal.md`
+  - Universidad: `~/Documents/Obsidian/Universidad/8vo Semestre/Pendientes Universidad.md`
+  - Fedora: `~/Documents/Obsidian/Pendientes Fedora.md`
+- Quick notes saved to: `~/Documents/Obsidian/Rough Notes/`
 
-# 2. Ejecutar el instalador
-chmod +x install.sh
-./install.sh
-
-# 3. Lanzar el widget
-python3 calendar_widget.py
-```
-
-## ⚙️ Configuración
-
-Edita la clase `Config` en `calendar_widget.py` para personalizar:
-
-### Colores
-```python
-BG_COLOR = QColor(30, 30, 35, int(255 * 0.85))  # Fondo
-ACCENT_COLOR = QColor(66, 133, 244)  # Color de acento
-```
-
-### Rutas de Obsidian
-```python
-PENDIENTES_FILES = [
-    "/ruta/a/tu/archivo1.md",
-    "/ruta/a/tu/archivo2.md",
-]
-```
-
-### Horario
-```python
-SCHEDULE = {
-    0: [  # Lunes (0=Lunes, 6=Domingo)
-        ("13:00", "14:20", "Nombre Clase", "#color"),
-    ],
-    # ...
-}
-```
-
-## 🔌 Integraciones Futuras
-
-### Microsoft Teams (Graph API)
-Para conectar con Teams necesitas:
-1. Registrar una app en [Azure Portal](https://portal.azure.com)
-2. Obtener Client ID y configurar permisos `Calendars.Read`
-3. Ver `teams_integration.py` para más detalles
-
-### Brightspace D2L
-Para conectar con D2L necesitas:
-1. Token de API institucional
-2. URL de tu instancia de Brightspace
-3. Ver `brightspace_integration.py` para más detalles
-
-## 🎨 Uso en KDE Plasma
-
-1. El widget ya funciona como ventana flotante independiente
-2. Para modo "Dodge Windows": Click derecho en la barra de título > Más acciones > Mantener debajo
-3. Para inicio automático: Configuración > Inicio automático > Añadir script
-
-## 📝 Formato de Pendientes en Obsidian
-
-El widget lee tareas en formato checkbox:
-
+### Task Format
 ```markdown
-# Mis Pendientes
-
-- [ ] Tarea pendiente 1
-- [ ] Tarea pendiente 2
-- [x] Tarea completada (no se muestra)
+- [ ] Task Title | Optional description [deadline: 2024-12-31] [priority: alta] (en progreso)
 ```
 
-## 🐛 Solución de Problemas
+## Installation
 
-### El widget no aparece
+### Requirements
+- Python 3.10+
+- PyQt6
+- SQLite (included with Python)
+
+### Install Dependencies
 ```bash
-# Verificar PyQt6
-python3 -c "from PyQt6.QtWidgets import QApplication; print('OK')"
+pip install PyQt6
 ```
 
-### Las tareas no se cargan
-- Verifica que las rutas en `PENDIENTES_FILES` sean correctas
-- Asegúrate de usar el formato `- [ ]` para las tareas
+### Run the Application
 
-## 📄 Licencia
+**Main App:**
+```bash
+python main_app.py
+```
 
-MIT License - Úsalo como quieras!
+**Desktop Widget:**
+```bash
+python widget.py
+```
+
+## Project Structure
+```
+CalendarWidget/
+├── main_app.py          # Main application entry
+├── widget.py            # Desktop widget entry
+├── src/
+│   ├── core/
+│   │   ├── database.py      # SQLite persistence
+│   │   ├── task_manager.py  # Task CRUD operations
+│   │   ├── obsidian_sync.py # Obsidian integration
+│   │   └── notifications.py # Desktop notifications
+│   ├── ui/
+│   │   ├── widgets/
+│   │   │   ├── calendar.py   # Monthly calendar
+│   │   │   ├── schedule.py   # Weekly schedule
+│   │   │   ├── kanban.py     # Kanban board
+│   │   │   ├── pomodoro.py   # Pomodoro timer
+│   │   │   ├── quick_notes.py
+│   │   │   └── common.py     # Shared components
+│   │   ├── dialogs/
+│   │   │   └── task_dialogs.py
+│   │   └── views/
+│   │       ├── dashboard.py
+│   │       ├── tasks_view.py
+│   │       ├── calendar_view.py
+│   │       └── statistics_view.py
+│   └── utils/
+│       ├── styles.py     # Glassmorphism theme
+│       └── constants.py  # App configuration
+└── assets/
+    └── icons/
+```
+
+## Data Storage
+- Database: `~/.local/share/UnixProductivityApp/data.db`
+- All data persists across restarts
+
+## Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+1 | Dashboard |
+| Ctrl+2 | Tasks |
+| Ctrl+3 | Calendar |
+| Ctrl+4 | Notes |
+| Ctrl+5 | Statistics |
+| Ctrl+N | New Task |
+| Ctrl+F | Focus Search |
+| F5 | Refresh |
+
+## KDE Plasma Widget Setup
+1. Run `python widget.py`
+2. Position the widget where you want it
+3. (Optional) Add to autostart: `~/.config/autostart/`
+4. Configure window rules in System Settings for "Dodge Windows" behavior
+
+## License
+MIT
