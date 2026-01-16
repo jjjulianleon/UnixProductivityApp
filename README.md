@@ -1,119 +1,302 @@
 # UnixProductivityApp
 
-A productivity desktop application for Linux (KDE Plasma) with calendar, task management, Pomodoro timer, and Obsidian integration.
+Aplicacion de productividad para Linux diseñada para KDE Plasma con integracion a Obsidian, calendario estilo Microsoft Teams, gestion de tareas con Kanban y temporizador Pomodoro.
 
-## Features
+Desarrollada con Python 3.13 y PyQt6 con un diseno glassmorphism moderno.
 
-### Main Application
-- 🏠 **Dashboard** - Today's overview with upcoming deadlines and tasks
-- 📋 **Kanban Board** - Drag & drop task management (Pendiente → En Progreso → Completado)
-- 📅 **Calendar** - Monthly calendar with deadline indicators + weekly schedule
-- 📝 **Quick Notes** - Fast notes synced with Obsidian Rough Notes
-- 🍅 **Pomodoro Timer** - 25/5 productivity timer with statistics
-- 📈 **Statistics** - Weekly/monthly productivity tracking
-- 🔔 **Notifications** - Desktop alerts for upcoming deadlines
-- ⌨️ **Keyboard Shortcuts** - Ctrl+1-5 for navigation, Ctrl+N for new task
+---
 
-### Desktop Widget (520x320)
-- Compact calendar with deadline dots
-- Weekly schedule view
-- Mini Kanban with pending/in-progress tasks
-- Today/Tomorrow deadlines list
-- Mini Pomodoro timer
-- Quick note button
-- Draggable, stays on desktop
+## Tabla de Contenidos
 
-### Obsidian Integration
-- Bidirectional sync with markdown files
-- Supports:
-  - Personal: `~/Documents/Obsidian/Personal/Pendientes Personal.md`
-  - Universidad: `~/Documents/Obsidian/Universidad/8vo Semestre/Pendientes Universidad.md`
-  - Fedora: `~/Documents/Obsidian/Pendientes Fedora.md`
-- Quick notes saved to: `~/Documents/Obsidian/Rough Notes/`
+1. [Caracteristicas](#caracteristicas)
+2. [Requisitos](#requisitos)
+3. [Instalacion](#instalacion)
+4. [Uso](#uso)
+5. [Estructura del Proyecto](#estructura-del-proyecto)
+6. [Almacenamiento de Datos](#almacenamiento-de-datos)
+7. [Atajos de Teclado](#atajos-de-teclado)
+8. [Configuracion del Widget](#configuracion-del-widget)
+9. [Integracion con Obsidian](#integracion-con-obsidian)
+10. [Licencia](#licencia)
 
-### Task Format
-```markdown
-- [ ] Task Title | Optional description [deadline: 2024-12-31] [priority: alta] (en progreso)
-```
+---
 
-## Installation
+## Caracteristicas
 
-### Requirements
-- Python 3.10+
+### Aplicacion Principal
+
+**Dashboard**
+- Vista general del dia actual
+- Tareas pendientes con fechas limite proximas
+- Acceso rapido a todas las secciones
+
+**Tablero Kanban**
+- Gestion de tareas con drag and drop
+- Tres columnas: Pendiente, En Progreso, Completado
+- Tarjetas con informacion de categoria, prioridad y fecha limite
+- Filtrado por categoria y busqueda
+
+**Calendario**
+- Vista mensual con indicadores de fechas limite
+- Vista semanal estilo Microsoft Teams
+- Canvas personalizado con QPainter para visualizacion fluida
+- Eventos con soporte para horarios superpuestos
+- Creacion, edicion y eliminacion de eventos
+
+**Notas Rapidas**
+- Notas sincronizadas con Obsidian Rough Notes
+- Creacion rapida desde cualquier parte de la app
+- Guardado automatico en formato markdown
+
+**Temporizador Pomodoro**
+- Intervalos configurables de trabajo y descanso
+- Valores por defecto: 25/5/15 minutos
+- Seguimiento de sesiones completadas
+- Estadisticas de productividad
+
+**Estadisticas**
+- Graficos de productividad semanal y mensual
+- Tareas completadas por dia
+- Tiempo de enfoque acumulado
+- Sesiones Pomodoro completadas
+
+**Sistema de Notificaciones**
+- Alertas de escritorio para fechas limite
+- Recordatorios configurables
+- Integracion con el sistema de notificaciones de Linux
+
+### Widget de Escritorio
+
+Dimensiones: 520x320 pixeles
+
+Componentes:
+- Calendario compacto con puntos indicadores de fechas limite
+- Vista semanal del horario
+- Mini Kanban con tareas pendientes y en progreso
+- Lista de fechas limite para hoy y manana
+- Temporizador Pomodoro compacto
+- Boton de nota rapida
+- Arrastrable y permanece en el escritorio
+
+---
+
+## Requisitos
+
+- Python 3.10 o superior (desarrollado con 3.13)
 - PyQt6
-- SQLite (included with Python)
+- SQLite (incluido con Python)
+- Sistema operativo: Linux (optimizado para KDE Plasma/Wayland)
+- Fuente: Source Code Pro (recomendada)
 
-### Install Dependencies
+### Dependencias Opcionales
+
+- icalendar: Para integracion con calendarios ICS
+- requests: Para integraciones con Microsoft Teams y Brightspace D2L
+
+---
+
+## Instalacion
+
+### Instalar dependencias base
+
 ```bash
 pip install PyQt6
 ```
 
-### Run the Application
+### Dependencias opcionales
 
-**Main App:**
+```bash
+pip install icalendar requests
+```
+
+### Clonar o descargar el proyecto
+
+```bash
+cd ~/Desktop
+git clone <repositorio> CalendarWidget
+cd CalendarWidget
+```
+
+---
+
+## Uso
+
+### Ejecutar la aplicacion principal
+
 ```bash
 python main_app.py
 ```
 
-**Desktop Widget:**
+### Ejecutar el widget de escritorio
+
 ```bash
 python widget.py
 ```
 
-## Project Structure
+### Ejecutar ambos
+
+```bash
+python main_app.py &
+python widget.py &
+```
+
+---
+
+## Estructura del Proyecto
+
 ```
 CalendarWidget/
-├── main_app.py          # Main application entry
-├── widget.py            # Desktop widget entry
-├── src/
-│   ├── core/
-│   │   ├── database.py      # SQLite persistence
-│   │   ├── task_manager.py  # Task CRUD operations
-│   │   ├── obsidian_sync.py # Obsidian integration
-│   │   └── notifications.py # Desktop notifications
-│   ├── ui/
-│   │   ├── widgets/
-│   │   │   ├── calendar.py   # Monthly calendar
-│   │   │   ├── schedule.py   # Weekly schedule
-│   │   │   ├── kanban.py     # Kanban board
-│   │   │   ├── pomodoro.py   # Pomodoro timer
-│   │   │   ├── quick_notes.py
-│   │   │   └── common.py     # Shared components
-│   │   ├── dialogs/
-│   │   │   └── task_dialogs.py
-│   │   └── views/
-│   │       ├── dashboard.py
-│   │       ├── tasks_view.py
-│   │       ├── calendar_view.py
-│   │       └── statistics_view.py
-│   └── utils/
-│       ├── styles.py     # Glassmorphism theme
-│       └── constants.py  # App configuration
-└── assets/
-    └── icons/
+|-- main_app.py                 # Punto de entrada de la aplicacion principal
+|-- widget.py                   # Punto de entrada del widget de escritorio
+|-- calendar_widget.py          # Widget compacto (version alternativa)
+|-- teams_integration.py        # Integracion con Microsoft Teams Graph API
+|-- brightspace_integration.py  # Integracion con Brightspace D2L
+|-- README.md                   # Este archivo
+|-- Documentacion.md            # Documentacion tecnica completa
+|-- install.sh                  # Script de instalacion
+|
+|-- src/
+|   |-- __init__.py
+|   |
+|   |-- core/
+|   |   |-- __init__.py
+|   |   |-- database.py         # Persistencia SQLite con backup/export
+|   |   |-- task_manager.py     # Operaciones CRUD de tareas
+|   |   |-- obsidian_sync.py    # Sincronizacion bidireccional con Obsidian
+|   |   |-- notifications.py    # Notificaciones de escritorio Linux
+|   |   |-- signals.py          # Hub central de senales PyQt
+|   |
+|   |-- ui/
+|   |   |-- __init__.py
+|   |   |
+|   |   |-- widgets/
+|   |   |   |-- __init__.py
+|   |   |   |-- calendar.py     # Widget de calendario mensual
+|   |   |   |-- schedule.py     # Vista semanal estilo Teams (QPainter)
+|   |   |   |-- kanban.py       # Tablero Kanban con drag and drop
+|   |   |   |-- pomodoro.py     # Temporizador Pomodoro
+|   |   |   |-- quick_notes.py  # Widget de notas rapidas
+|   |   |   |-- common.py       # Componentes compartidos (tarjetas, etc)
+|   |   |
+|   |   |-- dialogs/
+|   |   |   |-- __init__.py
+|   |   |   |-- task_dialogs.py     # Dialogos de tareas y eventos
+|   |   |   |-- settings_dialog.py  # Dialogo de configuracion
+|   |   |
+|   |   |-- views/
+|   |   |   |-- __init__.py
+|   |   |   |-- dashboard.py        # Vista del dashboard
+|   |   |   |-- tasks_view.py       # Vista de tareas (Kanban completo)
+|   |   |   |-- calendar_view.py    # Vista de calendario
+|   |   |   |-- statistics_view.py  # Vista de estadisticas
+|   |
+|   |-- utils/
+|       |-- __init__.py
+|       |-- styles.py           # Tema glassmorphism y estilos
+|       |-- constants.py        # Configuracion y constantes
+|
+|-- assets/
+|   |-- icons/                  # Iconos de la aplicacion
+|
+|-- tests/                      # Tests unitarios
+|
+|-- resources/                  # Recursos adicionales
 ```
 
-## Data Storage
-- Database: `~/.local/share/UnixProductivityApp/data.db`
-- All data persists across restarts
+---
 
-## Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+1 | Dashboard |
-| Ctrl+2 | Tasks |
-| Ctrl+3 | Calendar |
-| Ctrl+4 | Notes |
-| Ctrl+5 | Statistics |
-| Ctrl+N | New Task |
-| Ctrl+F | Focus Search |
-| F5 | Refresh |
+## Almacenamiento de Datos
 
-## KDE Plasma Widget Setup
-1. Run `python widget.py`
-2. Position the widget where you want it
-3. (Optional) Add to autostart: `~/.config/autostart/`
-4. Configure window rules in System Settings for "Dodge Windows" behavior
+### Base de Datos
 
-## License
-MIT
+Ubicacion: `~/.local/share/UnixProductivityApp/data.db`
+
+Tablas:
+- tasks: Tareas con titulo, descripcion, categoria, estado, prioridad, fecha limite
+- quick_notes: Notas rapidas con titulo y contenido
+- pomodoro_sessions: Sesiones de Pomodoro completadas
+- schedule_events: Eventos del horario semanal
+- statistics: Estadisticas diarias de productividad
+- settings: Configuracion de la aplicacion
+- reminders: Recordatorios programados
+- backup_history: Historial de backups
+
+### Backups
+
+Ubicacion: `~/.local/share/UnixProductivityApp/backups/`
+
+Formatos de exportacion:
+- JSON
+- CSV
+- SQLite (copia de la base de datos)
+
+---
+
+## Atajos de Teclado
+
+| Atajo   | Accion            |
+|---------|-------------------|
+| Ctrl+1  | Ir a Dashboard    |
+| Ctrl+2  | Ir a Tareas       |
+| Ctrl+3  | Ir a Calendario   |
+| Ctrl+4  | Ir a Notas        |
+| Ctrl+5  | Ir a Estadisticas |
+| Ctrl+N  | Nueva Tarea       |
+| Ctrl+F  | Enfocar Busqueda  |
+| F5      | Refrescar         |
+
+---
+
+## Configuracion del Widget
+
+1. Ejecutar el widget: `python widget.py`
+2. Posicionar el widget arrastrando
+3. Para autostart, crear archivo en `~/.config/autostart/`:
+
+```desktop
+[Desktop Entry]
+Type=Application
+Name=UnixProductivityApp Widget
+Exec=python /ruta/a/CalendarWidget/widget.py
+Hidden=false
+X-KDE-autostart-after=panel
+```
+
+4. Configurar reglas de ventana en KDE System Settings para comportamiento "Dodge Windows"
+
+---
+
+## Integracion con Obsidian
+
+### Rutas de sincronizacion configuradas
+
+- Personal: `~/Documents/Obsidian/Personal/Pendientes Personal.md`
+- Universidad: `~/Documents/Obsidian/Universidad/8vo Semestre/Pendientes Universidad.md`
+- Fedora: `~/Documents/Obsidian/Pendientes Fedora.md`
+
+### Notas rapidas
+
+Se guardan en: `~/Documents/Obsidian/Rough Notes/`
+
+### Formato de tareas en Obsidian
+
+```markdown
+- [ ] Titulo de la tarea | Descripcion opcional [deadline: 2026-01-31] [priority: alta] (en progreso)
+```
+
+Estados soportados:
+- `- [ ]`: Pendiente
+- `- [ ] ... (en progreso)`: En progreso
+- `- [x]`: Completado
+
+---
+
+## Licencia
+
+MIT License
+
+---
+
+## Autor
+
+Julian Leon

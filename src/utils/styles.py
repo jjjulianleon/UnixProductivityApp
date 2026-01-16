@@ -102,6 +102,29 @@ def get_button_style(variant='default'):
         }}
     """
 
+def get_nav_button_style():
+    """Style for navigation arrows (< >) in calendar and schedule"""
+    color = COLORS['text_secondary']
+    return f"""
+        QPushButton {{
+            background-color: rgba(255, 255, 255, 0.08);
+            color: rgb({color});
+            border: 1px solid rgba({color}, 0.3);
+            border-radius: 6px;
+            padding: 0px;
+            font-family: "DejaVu Sans", "Noto Sans", sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+        }}
+        QPushButton:hover {{
+            background-color: rgba({color}, 0.15);
+            border: 1px solid rgba({color}, 0.5);
+        }}
+        QPushButton:pressed {{
+            background-color: rgba({color}, 0.25);
+        }}
+    """
+
 def get_input_style():
     return f"""
         QLineEdit, QTextEdit, QPlainTextEdit {{
@@ -121,36 +144,76 @@ def get_input_style():
 def get_combobox_style():
     return f"""
         QComboBox {{
-            background-color: rgba(20, 20, 25, 200);
+            background-color: rgb(25, 25, 30);
             color: rgb({COLORS['text_primary']});
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 6px;
             padding: 8px 12px;
+            padding-right: 30px;
             font-family: "{FONT_FAMILY}";
             font-size: 10px;
             min-width: 100px;
         }}
         QComboBox:hover {{
-            border: 1px solid rgba({COLORS['primary']}, 0.3);
+            border: 1px solid rgba({COLORS['primary']}, 0.4);
+        }}
+        QComboBox:focus {{
+            border: 1px solid rgba({COLORS['primary']}, 0.6);
         }}
         QComboBox::drop-down {{
-            border: none;
+            subcontrol-origin: padding;
+            subcontrol-position: right center;
             width: 24px;
+            border: none;
+            background: transparent;
         }}
         QComboBox::down-arrow {{
-            image: none;
+            width: 0;
+            height: 0;
             border-left: 5px solid transparent;
             border-right: 5px solid transparent;
             border-top: 6px solid rgb({COLORS['text_secondary']});
-            margin-right: 8px;
+        }}
+        QComboBox::down-arrow:hover {{
+            border-top-color: rgb({COLORS['primary']});
         }}
         QComboBox QAbstractItemView {{
-            background-color: rgba(35, 35, 40, 250);
+            background-color: rgb(30, 30, 35);
             color: rgb({COLORS['text_primary']});
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            selection-background-color: rgba({COLORS['primary']}, 0.3);
+            border: 1px solid rgb(50, 50, 55);
+            selection-background-color: rgba({COLORS['primary']}, 0.4);
+            selection-color: rgb({COLORS['text_primary']});
             padding: 4px;
+            outline: none;
+        }}
+        QComboBox QAbstractItemView::item {{
+            padding: 8px 12px;
+            min-height: 24px;
+            background-color: rgb(30, 30, 35);
+            color: rgb({COLORS['text_primary']});
+        }}
+        QComboBox QAbstractItemView::item:hover {{
+            background-color: rgba({COLORS['primary']}, 0.3);
+        }}
+        QComboBox QAbstractItemView::item:selected {{
+            background-color: rgba({COLORS['primary']}, 0.4);
+        }}
+        QListView {{
+            background-color: rgb(30, 30, 35);
+            color: rgb({COLORS['text_primary']});
+            border: none;
+            outline: none;
+        }}
+        QListView::item {{
+            background-color: rgb(30, 30, 35);
+            color: rgb({COLORS['text_primary']});
+            padding: 8px 12px;
+        }}
+        QListView::item:hover {{
+            background-color: rgba({COLORS['primary']}, 0.3);
+        }}
+        QListView::item:selected {{
+            background-color: rgba({COLORS['primary']}, 0.4);
         }}
     """
 
@@ -358,3 +421,34 @@ def get_deadline_color(days_until: int) -> str:
         return COLORS['primary']
     else:
         return COLORS['success']
+
+
+def get_menu_style():
+    """Style for QMenu (context menus, dropdowns)"""
+    return f"""
+        QMenu {{
+            background-color: rgba(35, 35, 40, 250);
+            color: rgb({COLORS['text_primary']});
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 4px;
+        }}
+        QMenu::item {{
+            padding: 8px 24px 8px 16px;
+            border-radius: 4px;
+            margin: 2px 4px;
+        }}
+        QMenu::item:selected {{
+            background-color: rgba({COLORS['primary']}, 0.3);
+            color: rgb({COLORS['primary']});
+        }}
+        QMenu::separator {{
+            height: 1px;
+            background-color: rgba(255, 255, 255, 0.1);
+            margin: 4px 8px;
+        }}
+        QMenu::indicator {{
+            width: 16px;
+            height: 16px;
+        }}
+    """

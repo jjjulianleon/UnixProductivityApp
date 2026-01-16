@@ -6,7 +6,21 @@ from datetime import datetime, timedelta
 
 from .database import db
 from .obsidian_sync import ObsidianSync
+from .database import db
+from .obsidian_sync import ObsidianSync
 from .signals import signals
+
+# Try to import ICS integration
+try:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent))  # Add root dir
+    from ics_integration import UnifiedCalendarSync
+    from icloud_integration import ICloudSync
+    HAS_ICS = True
+except ImportError:
+    HAS_ICS = False
+    print("ICS/iCloud module not found")
 
 
 class TaskManager:
@@ -22,7 +36,17 @@ class TaskManager:
     
     def __init__(self):
         self.obsidian = ObsidianSync()
+        self.ics_sync = UnifiedCalendarSync() if HAS_ICS else None
+        self.icloud_sync = ICloudSync() if HAS_ICS else None
         self._initial_sync()
+        self.sync_external_calendars()
+        
+        # Auto-refresh timer (every 15 minutes)
+        if HAS_ICS:
+            from PyQt6.QtCore import QTimer
+            self.refresh_timer = QTimer()
+            self.refresh_timer.timeout.connect(self.sync_external_calendars)
+            self.refresh_timer.start(15 * 60 * 1000) # 15 minutes
     
     def _initial_sync(self):
         """Sync tasks from Obsidian to database on startup"""
@@ -44,6 +68,103 @@ class TaskManager:
                     )
         except Exception:
             pass  # Silently fail if Obsidian sync fails
+            
+    def sync_external_calendars(self):
+        """Sync with external ICS calendars (Brightspace & Teams)"""
+        if not self.ics_sync:
+            return
+            
+        try:
+            # Sync all data
+            results = self.ics_sync.sync_all()
+            
+            # Process Brightspace deadlines -> Tasks
+            new_tasks_count = 0
+            for dl in results.get('brightspace_deadlines', []):
+                # Check if task already exists check by title and approximate deadline
+                exists = False
+                existing_tasks = db.search_tasks(dl['title'])
+                
+                # Check duplicates carefully
+                for t in existing_tasks:
+                    if t['category'] == 'Universidad':
+                        # If date is same day, assume duplicate
+                        if t['deadline'] and dl['due_date'].startswith(t['deadline']):
+                            exists = True
+                            break
+                            
+                if not exists:
+                    # Extract date YYYY-MM-DD
+                    deadline_date = dl['due_date'].split('T')[0]
+                    
+                    # Create tags list
+                    tags = ['Brightspace']
+                    if dl.get('course_code'):
+                        tags.append(dl['course_code'])
+                    if dl.get('course_name'):
+                        tags.append(dl['course_name'])
+                    if dl.get('type') and dl['type'] != 'other':
+                        tags.append(dl['type'])
+                        
+                    tag_str = f"[{', '.join(tags)}]"
+                    
+                    # Add task
+                    db.add_task(
+                        title=dl['title'],
+                        category="Universidad",  # Force category
+                        description=f"{dl.get('description', '')}\n\n[Materia: {dl.get('course_name', 'Unknown')}]",
+                        status="pendiente",
+                        priority="alta" if dl.get('type') in ['exam', 'project'] else "media",
+                        deadline=deadline_date,
+                        tags=tags
+                    )
+                    new_tasks_count += 1
+            
+            if new_tasks_count > 0:
+                signals.tasks_reloaded.emit()
+                signals.stats_updated.emit()
+                
+            # Collect external events
+            all_external_events = []
+            
+            # 1. Teams Events
+            teams_events = results.get('teams_events', [])
+            all_external_events.extend(teams_events)
+            
+            # 2. iCloud Events
+            if self.icloud_sync:
+                try:
+                    now = datetime.now()
+                    # Get events for current week +/- 2 weeks
+                    icloud_events = self.icloud_sync.get_events(
+                        start_date=now - timedelta(days=14),
+                        end_date=now + timedelta(days=30)
+                    )
+                    
+                    # Convert to uniform format
+                    for evt in icloud_events:
+                        all_external_events.append({
+                            'uid': evt['uid'],
+                            'title': evt['title'],
+                            'start': evt['start_time'].isoformat(),
+                            'end': evt['end_time'].isoformat(),
+                            'location': evt['location'],
+                            'source': 'icloud',
+                            'is_meeting': False,
+                            'color': '52, 152, 219' # Blue
+                        })
+                except Exception as e:
+                    print(f"iCloud sync error: {e}")
+            
+            # Emit merged events
+            if all_external_events:
+                signals.teams_events_updated.emit(all_external_events)
+                
+            signals.ics_sync_completed.emit(results)
+            
+        except Exception as e:
+            print(f"Error syncing external calendars: {e}")
+            signals.ics_error.emit(str(e))
     
     def add_task(self, title: str, category: str, description: str = "",
                  status: str = "pendiente", priority: str = "media",
@@ -174,9 +295,13 @@ class TaskManager:
         all_deadline_tasks = db.get_tasks_with_deadlines()
         return [t for t in all_deadline_tasks if t['deadline'] < today]
     
+    def get_tasks_by_category(self, category: str) -> List[Dict]:
+        """Get all tasks for a specific category"""
+        return db.get_all_tasks(category=category)
+    
     def get_in_progress_tasks(self) -> List[Dict]:
         """Get tasks that are in progress"""
-        return db.get_all_tasks(status='en_progreso')
+        return db.get_all_tasks(status='en progreso')
     
     def get_pending_tasks(self) -> List[Dict]:
         """Get pending tasks"""

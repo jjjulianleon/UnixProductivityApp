@@ -269,6 +269,11 @@ class DesktopWidget(QWidget):
         self.signals.task_added.connect(self._sync_deadlines)
         self.signals.task_updated.connect(self._sync_deadlines)
         self.signals.task_deleted.connect(self._sync_deadlines)
+        self.signals.teams_events_updated.connect(self._update_external_events)
+
+    def _update_external_events(self, events: list):
+        """Update external events in schedule"""
+        self.schedule.set_external_events(events)
     
     def setup_ui(self):
         # Main container with glassmorphism

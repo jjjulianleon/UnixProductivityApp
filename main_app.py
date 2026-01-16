@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QIcon, QAction, QShortcut, QKeySequence, QPixmap
 
-from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_main_window_style
+from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_main_window_style, get_menu_style
 from src.utils.constants import APP_NAME, MAIN_APP_MIN_WIDTH, MAIN_APP_MIN_HEIGHT
 from src.core.task_manager import task_manager
 from src.core.notifications import notification_manager
@@ -98,6 +98,7 @@ class MainWindow(QMainWindow):
         self.tray_icon.setToolTip(APP_NAME)
         
         tray_menu = QMenu()
+        tray_menu.setStyleSheet(get_menu_style())
         
         # Show/Hide
         show_action = QAction("Mostrar", self)
@@ -119,6 +120,7 @@ class MainWindow(QMainWindow):
         
         # Backup/Export submenu
         data_menu = tray_menu.addMenu("Datos")
+        data_menu.setStyleSheet(get_menu_style())
         
         backup_action = QAction("Crear Backup", self)
         backup_action.triggered.connect(self._create_backup)
@@ -565,6 +567,7 @@ class MainWindow(QMainWindow):
         from src.ui.dialogs.settings_dialog import SettingsDialog
         try:
             dialog = SettingsDialog(self)
+            dialog.settings_changed.connect(self._on_settings_changed)
             dialog.exec()
         except ImportError:
             QMessageBox.information(
@@ -572,6 +575,15 @@ class MainWindow(QMainWindow):
                 "Configuracion",
                 "El dialogo de configuracion estara disponible pronto."
             )
+    
+    def _on_settings_changed(self, settings: dict):
+        """Handle settings changes"""
+        # Reload pomodoro settings
+        if hasattr(self, 'main_pomodoro'):
+            self.main_pomodoro.reload_settings()
+        # Reload pomodoro in calendar view if exists
+        if hasattr(self, 'calendar_view') and hasattr(self.calendar_view, 'pomodoro'):
+            self.calendar_view.pomodoro.reload_settings()
     
     def _show_window(self):
         """Show and activate window"""

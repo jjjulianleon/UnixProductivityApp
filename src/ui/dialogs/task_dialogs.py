@@ -43,7 +43,7 @@ class AddTaskDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 245);
-                border: 1px solid rgba(255, 255, 255, 30);
+                border: none;
                 border-radius: 12px;
             }}
         """)
@@ -229,7 +229,7 @@ class TaskDetailDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 245);
-                border: 1px solid rgba(255, 255, 255, 30);
+                border: none;
                 border-radius: 12px;
             }}
         """)
@@ -364,7 +364,7 @@ class TaskDetailDialog(QDialog):
         delete_btn = QPushButton("Eliminar")
         delete_btn.setFont(QFont(FONT_FAMILY, 9))
         delete_btn.setStyleSheet(get_button_style('danger'))
-        delete_btn.setFixedWidth(70)
+        delete_btn.setMinimumWidth(85)
         delete_btn.clicked.connect(self._delete_task)
         btn_layout.addWidget(delete_btn)
         
@@ -419,7 +419,7 @@ class DeadlineTasksDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 245);
-                border: 1px solid rgba(255, 255, 255, 30);
+                border: none;
                 border-radius: 12px;
             }}
         """)
@@ -516,3 +516,211 @@ class DeadlineTasksDialog(QDialog):
         self.task_clicked.emit(task)
         dialog = TaskDetailDialog(task, self)
         dialog.exec()
+
+
+class ScheduleEventDialog(QDialog):
+    """Dialog to add/edit a schedule event"""
+    
+    event_saved = pyqtSignal(dict)
+    event_deleted = pyqtSignal(int)
+    
+    def __init__(self, day_index: int = 0, hour: int = 9, 
+                 event: Dict = None, parent=None):
+        super().__init__(parent)
+        self.day_index = day_index
+        self.hour = hour
+        self.event = event
+        self.is_edit = event is not None
+        
+        self.setWindowTitle("Editar Evento" if self.is_edit else "Nuevo Evento")
+        self.setFixedSize(380, 350)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        self.setup_ui()
+    
+    def setup_ui(self):
+        container = QFrame(self)
+        container.setGeometry(0, 0, 380, 350)
+        container.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(30, 30, 35, 245);
+                border: none;
+                border-radius: 12px;
+            }}
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+        
+        # Header
+        header = QLabel("Editar Evento" if self.is_edit else "Nuevo Evento")
+        header.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        header.setStyleSheet(f"color: rgb({COLORS['primary']}); background: transparent;")
+        layout.addWidget(header)
+        
+        # Source Selection (only for new events)
+        if not self.is_edit:
+            source_layout = QHBoxLayout()
+            source_lbl = QLabel("Guardar en:")
+            source_lbl.setFont(QFont(FONT_FAMILY, 9))
+            source_lbl.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
+            source_layout.addWidget(source_lbl)
+            
+            self.source_combo = QComboBox()
+            self.source_combo.addItems(["Local (Semanal Recurrente)", "iCloud (Fecha Unica)"])
+            self.source_combo.setFont(QFont(FONT_FAMILY, 10))
+            self.source_combo.setStyleSheet(get_combobox_style())
+            self.source_combo.currentIndexChanged.connect(self._toggle_source)
+            source_layout.addWidget(self.source_combo)
+            layout.addLayout(source_layout)
+        
+        # Title input
+        title_label = QLabel("Titulo")
+        title_label.setFont(QFont(FONT_FAMILY, 9))
+        title_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
+        layout.addWidget(title_label)
+        
+        self.title_input = QLineEdit()
+        self.title_input.setFont(QFont(FONT_FAMILY, 10))
+        self.title_input.setStyleSheet(get_input_style())
+        self.title_input.setPlaceholderText("Nombre del evento")
+        if self.event:
+            self.title_input.setText(self.event.get('title', ''))
+        layout.addWidget(self.title_input)
+        
+        # Date/Day selection
+        self.day_label = QLabel("Dia de la semana")
+        self.day_label.setFont(QFont(FONT_FAMILY, 9))
+        self.day_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
+        layout.addWidget(self.day_label)
+        
+        self.day_combo = QComboBox()
+        self.day_combo.setFont(QFont(FONT_FAMILY, 10))
+        self.day_combo.setStyleSheet(get_combobox_style())
+        days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+        self.day_combo.addItems(days)
+        if self.event:
+            self.day_combo.setCurrentIndex(self.event.get('day_of_week', 0))
+        else:
+            self.day_combo.setCurrentIndex(self.day_index)
+        layout.addWidget(self.day_combo)
+        
+        # Specific Date (for iCloud)
+        self.date_edit = QDateEdit()
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDate(QDate.currentDate())
+        self.date_edit.setFont(QFont(FONT_FAMILY, 10))
+        self.date_edit.setStyleSheet(get_input_style())
+        self.date_edit.setVisible(False)
+        layout.addWidget(self.date_edit)
+        
+        # Time row
+        time_layout = QHBoxLayout()
+        
+        # Start time
+        start_layout = QVBoxLayout()
+        start_label = QLabel("Hora inicio")
+        start_label.setFont(QFont(FONT_FAMILY, 9))
+        start_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
+        start_layout.addWidget(start_label)
+        
+        self.start_time = QComboBox()
+        self.start_time.setFont(QFont(FONT_FAMILY, 10))
+        self.start_time.setStyleSheet(get_combobox_style())
+        for h in range(6, 23):
+            self.start_time.addItem(f"{h:02d}:00")
+        if self.event:
+            start_h = int(self.event.get('start_time', '09:00').split(':')[0])
+            self.start_time.setCurrentIndex(max(0, start_h - 6))
+        else:
+            self.start_time.setCurrentIndex(max(0, self.hour - 6))
+        start_layout.addWidget(self.start_time)
+        time_layout.addLayout(start_layout)
+        
+        # End time
+        end_layout = QVBoxLayout()
+        end_label = QLabel("Hora fin")
+        end_label.setFont(QFont(FONT_FAMILY, 9))
+        end_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
+        end_layout.addWidget(end_label)
+        
+        self.end_time = QComboBox()
+        self.end_time.setFont(QFont(FONT_FAMILY, 10))
+        self.end_time.setStyleSheet(get_combobox_style())
+        for h in range(6, 23):
+            self.end_time.addItem(f"{h:02d}:00")
+        if self.event:
+            end_h = int(self.event.get('end_time', '10:00').split(':')[0])
+            self.end_time.setCurrentIndex(max(0, end_h - 6))
+        else:
+            self.end_time.setCurrentIndex(max(0, self.hour - 5))
+        end_layout.addWidget(self.end_time)
+        time_layout.addLayout(end_layout)
+        
+        layout.addLayout(time_layout)
+        
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        
+        if self.is_edit:
+            delete_btn = QPushButton("Eliminar")
+            delete_btn.setFont(QFont(FONT_FAMILY, 9))
+            delete_btn.setStyleSheet(get_button_style('danger'))
+            delete_btn.clicked.connect(self._delete)
+            buttons_layout.addWidget(delete_btn)
+        
+        buttons_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancelar")
+        cancel_btn.setFont(QFont(FONT_FAMILY, 9))
+        cancel_btn.setStyleSheet(get_button_style())
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("Guardar")
+        save_btn.setFont(QFont(FONT_FAMILY, 9))
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self._save)
+        buttons_layout.addWidget(save_btn)
+        
+        layout.addLayout(buttons_layout)
+    
+    def _toggle_source(self):
+        is_icloud = self.source_combo.currentIndex() == 1
+        self.day_label.setText("Fecha" if is_icloud else "Dia de la semana")
+        self.day_combo.setVisible(not is_icloud)
+        self.date_edit.setVisible(is_icloud)
+        
+    def _save(self):
+        title = self.title_input.text().strip()
+        if not title:
+            return
+        
+        event_data = {
+            'title': title,
+            'start_time': self.start_time.currentText(),
+            'end_time': self.end_time.currentText(),
+            'color': COLORS['primary']
+        }
+        
+        if not self.is_edit and self.source_combo.currentIndex() == 1:
+            # iCloud Event
+            event_data['target'] = 'icloud'
+            event_data['date'] = self.date_edit.date().toString("yyyy-MM-dd")
+        else:
+            # Local Event
+            event_data['target'] = 'local'
+            event_data['day_of_week'] = self.day_combo.currentIndex()
+        
+        if self.event:
+            event_data['id'] = self.event.get('id')
+        
+        self.event_saved.emit(event_data)
+        self.accept()
+    
+    def _delete(self):
+        if self.event:
+            self.event_deleted.emit(self.event.get('id'))
+            self.accept()

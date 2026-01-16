@@ -148,7 +148,7 @@ class DashboardView(QWidget):
         pomodoro_frame.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(40, 40, 45, 150);
-                border: 1px solid rgba({COLORS['danger']}, 0.3);
+                border: none;
                 border-radius: 12px;
             }}
         """)

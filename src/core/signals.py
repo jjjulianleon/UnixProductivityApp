@@ -45,6 +45,12 @@ class SignalHub(QObject):
     obsidian_sync_completed = pyqtSignal()
     backup_completed = pyqtSignal(str)  # backup path
     
+    # External integrations
+    teams_events_updated = pyqtSignal(list)
+    brightspace_deadlines_updated = pyqtSignal(list)
+    ics_sync_completed = pyqtSignal(dict)
+    ics_error = pyqtSignal(str)
+    
     @classmethod
     def get_instance(cls):
         if cls._instance is None:

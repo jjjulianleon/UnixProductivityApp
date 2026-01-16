@@ -37,7 +37,7 @@ class KanbanColumn(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(40, 40, 45, 150);
-                border: 1px solid rgba(255, 255, 255, 0.05);
+                border: none;
                 border-radius: 10px;
             }}
         """)
@@ -144,10 +144,11 @@ class KanbanColumn(QFrame):
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-task"):
             event.acceptProposedAction()
+            # Subtle highlight - just a slight background brightness change
             self.setStyleSheet(f"""
                 QFrame {{
-                    background-color: rgba(40, 40, 45, 150);
-                    border: 2px solid rgba({self.color}, 0.5);
+                    background-color: rgba(50, 50, 55, 180);
+                    border: none;
                     border-radius: 10px;
                 }}
             """)
@@ -160,7 +161,7 @@ class KanbanColumn(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(40, 40, 45, 150);
-                border: 1px solid rgba(255, 255, 255, 0.05);
+                border: none;
                 border-radius: 10px;
             }}
         """)
@@ -169,7 +170,7 @@ class KanbanColumn(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(40, 40, 45, 150);
-                border: 1px solid rgba(255, 255, 255, 0.05);
+                border: none;
                 border-radius: 10px;
             }}
         """)
@@ -237,9 +238,9 @@ class KanbanBoard(QWidget):
             # Status changed - emit status change
             self.task_status_changed.emit(task, new_status)
         
-        # Update position
+        # Update position (correct argument order: task_id, position, status)
         if task_id:
-            task_manager.update_task_position(task_id, new_status, position)
+            task_manager.update_task_position(task_id, position, new_status)
     
     def set_tasks(self, tasks: List[Dict]):
         """Distribute tasks to columns, sorted by position"""

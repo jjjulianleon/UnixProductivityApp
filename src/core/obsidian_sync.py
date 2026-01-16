@@ -1,5 +1,6 @@
 """
 Obsidian Sync - Bidirectional sync with Obsidian markdown files
+Uses the actual paths defined in constants.py
 """
 import os
 import re
@@ -7,90 +8,104 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
+from src.utils.constants import OBSIDIAN_VAULT_PATHS, OBSIDIAN_ROUGH_NOTES
+
 
 class ObsidianSync:
-    """Handles synchronization with Obsidian vault"""
+    """Handles synchronization with Obsidian vault using actual paths"""
     
-    def __init__(self, vault_path: Optional[str] = None):
-        self.vault_path = Path(vault_path) if vault_path else Path.home() / "Documents" / "Obsidian"
-        self.tasks_folder = self.vault_path / "Tasks"
-        self.rough_notes_folder = self.vault_path / "Rough Notes"
+    def __init__(self):
+        self.vault_paths = OBSIDIAN_VAULT_PATHS
+        self.rough_notes_folder = OBSIDIAN_ROUGH_NOTES
         
-        self.tasks_folder.mkdir(parents=True, exist_ok=True)
+        # Ensure rough notes folder exists
         self.rough_notes_folder.mkdir(parents=True, exist_ok=True)
-        
-        self.categories = {
-            "personal": "Personal.md",
-            "trabajo": "Trabajo.md",
-            "universidad": "Universidad.md",
-            "salud": "Salud.md",
-            "proyectos": "Proyectos.md"
-        }
-        
-        self._ensure_category_files()
-    
-    def _ensure_category_files(self):
-        """Create category files if they don't exist"""
-        for category, filename in self.categories.items():
-            file_path = self.tasks_folder / filename
-            if not file_path.exists():
-                self._create_category_file(file_path, category)
-    
-    def _create_category_file(self, path: Path, category: str):
-        """Create a new category file with template"""
-        template = f"""# {category.title()}
-
-## Pendiente
-
-
-## En Progreso
-
-
-## Completado
-
-"""
-        path.write_text(template, encoding='utf-8')
     
     def read_all_tasks(self) -> List[Dict]:
-        """Read all tasks from Obsidian files"""
+        """Read all tasks from all Obsidian category files"""
         tasks = []
         
-        for category, filename in self.categories.items():
-            file_path = self.tasks_folder / filename
+        for category, file_path in self.vault_paths.items():
             if file_path.exists():
-                tasks.extend(self._parse_tasks_file(file_path, category))
+                category_tasks = self._parse_tasks_file(file_path, category)
+                tasks.extend(category_tasks)
         
         return tasks
     
     def _parse_tasks_file(self, file_path: Path, category: str) -> List[Dict]:
-        """Parse a single task file"""
+        """Parse tasks from a single Obsidian file"""
         tasks = []
-        content = file_path.read_text(encoding='utf-8')
         
-        task_pattern = r'- \[([ xX])\] (.+?)(?:\s*\[deadline: (\d{4}-\d{2}-\d{2})\])?(?:\s*\[priority: (\w+)\])?$'
+        try:
+            content = file_path.read_text(encoding='utf-8')
+        except Exception:
+            return tasks
         
         lines = content.split('\n')
-        current_status = 'pendiente'
         
         for line in lines:
-            if '## Pendiente' in line:
-                current_status = 'pendiente'
-            elif '## En Progreso' in line:
-                current_status = 'en_progreso'
-            elif '## Completado' in line:
-                current_status = 'completado'
+            line = line.strip()
             
-            match = re.match(task_pattern, line.strip())
-            if match:
-                checkbox, title, deadline, priority = match.groups()
-                status = 'completado' if checkbox.lower() == 'x' else current_status
-                
+            # Basic task pattern
+            basic_match = re.match(r'^- \[([ xX])\] (.+)$', line)
+            
+            if not basic_match:
+                continue
+            
+            checkbox, raw_text = basic_match.groups()
+            is_completed = checkbox.lower() == 'x'
+            
+            # Clean the title - extract metadata and clean
+            title = raw_text.strip()
+            deadline = None
+            priority = 'media'
+            status = 'completado' if is_completed else 'pendiente'
+            
+            # Extract (en progreso) status
+            if '(en progreso)' in title.lower():
+                status = 'en progreso' if not is_completed else 'completado'
+                title = re.sub(r'\s*\(en progreso\)', '', title, flags=re.IGNORECASE)
+            
+            # Extract [deadline: YYYY-MM-DD]
+            deadline_match = re.search(r'\[deadline:\s*(\d{4}-\d{2}-\d{2})\]', title)
+            if deadline_match:
+                deadline = deadline_match.group(1)
+                title = re.sub(r'\s*\[deadline:\s*\d{4}-\d{2}-\d{2}\]', '', title)
+            
+            # Extract deadline from emoji format: 📅 YYYY-MM-DD
+            emoji_deadline = re.search(r'[📅🗓️]\s*(\d{4}-\d{2}-\d{2})', title)
+            if emoji_deadline and not deadline:
+                deadline = emoji_deadline.group(1)
+                title = re.sub(r'\s*[📅🗓️]\s*\d{4}-\d{2}-\d{2}', '', title)
+            
+            # Extract [priority: xxx]
+            priority_match = re.search(r'\[priority:\s*(\w+)\]', title, re.IGNORECASE)
+            if priority_match:
+                priority = priority_match.group(1).lower()
+                title = re.sub(r'\s*\[priority:\s*\w+\]', '', title, flags=re.IGNORECASE)
+            
+            # Remove completion markers: ✅ YYYY-MM-DD or (completado: YYYY-MM-DD)
+            title = re.sub(r'\s*✅\s*\d{4}-\d{2}-\d{2}', '', title)
+            title = re.sub(r'\s*\(completado:\s*\d{4}-\d{2}-\d{2}\)', '', title)
+            
+            # Remove | separator if present (for descriptions)
+            description = ''
+            if ' | ' in title:
+                parts = title.split(' | ', 1)
+                title = parts[0].strip()
+                description = parts[1].strip() if len(parts) > 1 else ''
+            
+            # Final cleanup
+            title = title.strip()
+            
+            if title:
                 tasks.append({
-                    'title': title.strip(),
+                    'title': title,
+                    'description': description,
                     'category': category,
                     'status': status,
                     'deadline': deadline,
-                    'priority': priority or 'media'
+                    'priority': priority
                 })
         
         return tasks
@@ -98,46 +113,38 @@ class ObsidianSync:
     def add_task(self, title: str, category: str, status: str = "pendiente", 
                  deadline: Optional[str] = None, priority: str = "media"):
         """Add a task to the appropriate Obsidian file"""
-        filename = self.categories.get(category.lower(), "Personal.md")
-        file_path = self.tasks_folder / filename
+        file_path = self.vault_paths.get(category)
+        if not file_path:
+            return
         
+        # Ensure parent directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create file if doesn't exist
         if not file_path.exists():
-            self._create_category_file(file_path, category)
+            file_path.write_text(f"# Pendientes {category}\n\n", encoding='utf-8')
         
         content = file_path.read_text(encoding='utf-8')
         
+        # Build task line
         checkbox = 'x' if status == 'completado' else ' '
         task_line = f"- [{checkbox}] {title}"
         if deadline:
             task_line += f" [deadline: {deadline}]"
-        if priority != 'media':
+        if priority and priority != 'media':
             task_line += f" [priority: {priority}]"
+        if status == 'completado':
+            task_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
         task_line += "\n"
         
-        status_map = {
-            'pendiente': '## Pendiente',
-            'en_progreso': '## En Progreso',
-            'completado': '## Completado'
-        }
-        section_header = status_map.get(status, '## Pendiente')
-        
-        if section_header in content:
-            idx = content.find(section_header) + len(section_header)
-            while idx < len(content) and content[idx] != '\n':
-                idx += 1
-            idx += 1
-            content = content[:idx] + task_line + content[idx:]
-        else:
-            content += f"\n{section_header}\n{task_line}"
-        
+        # Add at the end
+        content += task_line
         file_path.write_text(content, encoding='utf-8')
     
     def update_task(self, old_title: str, category: str, **kwargs):
         """Update a task in the Obsidian file"""
-        filename = self.categories.get(category.lower(), "Personal.md")
-        file_path = self.tasks_folder / filename
-        
-        if not file_path.exists():
+        file_path = self.vault_paths.get(category)
+        if not file_path or not file_path.exists():
             return
         
         content = file_path.read_text(encoding='utf-8')
@@ -146,42 +153,32 @@ class ObsidianSync:
         
         for line in lines:
             if f"- [" in line and old_title in line:
-                match = re.match(
-                    r'- \[([ xX])\] (.+?)(?:\s*\[deadline: (\d{4}-\d{2}-\d{2})\])?(?:\s*\[priority: (\w+)\])?$',
-                    line.strip()
-                )
-                if match:
-                    checkbox, title, deadline, priority = match.groups()
-                    
-                    new_title = kwargs.get('title', old_title)
-                    new_status = kwargs.get('status')
-                    new_deadline = kwargs.get('deadline', deadline)
-                    new_priority = kwargs.get('priority', priority or 'media')
-                    
-                    if new_status == 'completado':
-                        checkbox = 'x'
-                    elif new_status:
-                        checkbox = ' '
-                    
-                    new_line = f"- [{checkbox}] {new_title}"
-                    if new_deadline:
-                        new_line += f" [deadline: {new_deadline}]"
-                    if new_priority and new_priority != 'media':
-                        new_line += f" [priority: {new_priority}]"
-                    
-                    new_lines.append(new_line)
-                    continue
-            
-            new_lines.append(line)
+                # Found the task to update
+                new_title = kwargs.get('title', old_title)
+                new_status = kwargs.get('status')
+                new_deadline = kwargs.get('deadline')
+                new_priority = kwargs.get('priority', 'media')
+                
+                checkbox = 'x' if new_status == 'completado' else ' '
+                new_line = f"- [{checkbox}] {new_title}"
+                
+                if new_deadline:
+                    new_line += f" [deadline: {new_deadline}]"
+                if new_priority and new_priority != 'media':
+                    new_line += f" [priority: {new_priority}]"
+                if new_status == 'completado':
+                    new_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
+                
+                new_lines.append(new_line)
+            else:
+                new_lines.append(line)
         
         file_path.write_text('\n'.join(new_lines), encoding='utf-8')
     
     def delete_task(self, title: str, category: str):
         """Remove a task from the Obsidian file"""
-        filename = self.categories.get(category.lower(), "Personal.md")
-        file_path = self.tasks_folder / filename
-        
-        if not file_path.exists():
+        file_path = self.vault_paths.get(category)
+        if not file_path or not file_path.exists():
             return
         
         content = file_path.read_text(encoding='utf-8')
@@ -214,16 +211,22 @@ Created: {datetime.now().strftime("%Y-%m-%d %H:%M")}
         """Get all quick notes from Rough Notes folder"""
         notes = []
         
+        if not self.rough_notes_folder.exists():
+            return notes
+        
         for file_path in self.rough_notes_folder.glob("*.md"):
-            content = file_path.read_text(encoding='utf-8')
-            
-            title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
-            title = title_match.group(1) if title_match else file_path.stem
-            
-            notes.append({
-                'title': title,
-                'file_path': str(file_path),
-                'modified': datetime.fromtimestamp(file_path.stat().st_mtime)
-            })
+            try:
+                content = file_path.read_text(encoding='utf-8')
+                
+                title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+                title = title_match.group(1) if title_match else file_path.stem
+                
+                notes.append({
+                    'title': title,
+                    'file_path': str(file_path),
+                    'modified': datetime.fromtimestamp(file_path.stat().st_mtime)
+                })
+            except Exception:
+                continue
         
         return sorted(notes, key=lambda x: x['modified'], reverse=True)

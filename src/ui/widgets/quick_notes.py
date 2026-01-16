@@ -41,7 +41,7 @@ class QuickNoteDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 245);
-                border: 1px solid rgba(255, 255, 255, 30);
+                border: none;
                 border-radius: 12px;
             }}
         """)
@@ -237,11 +237,14 @@ class QuickNotesWidget(QWidget):
             if note['title'] not in db_titles:
                 all_notes.append(note)
         
-        # Sort by date
-        all_notes.sort(
-            key=lambda x: x.get('updated_at', x.get('modified', '')),
-            reverse=True
-        )
+        # Sort by date - handle mixed str/datetime types
+        def get_sort_key(x):
+            val = x.get('updated_at', x.get('modified', ''))
+            if isinstance(val, datetime):
+                return val.isoformat()
+            return str(val) if val else ''
+        
+        all_notes.sort(key=get_sort_key, reverse=True)
         
         # Limit for compact view
         if self.compact:
@@ -267,7 +270,7 @@ class QuickNotesWidget(QWidget):
     def _create_note(self, title: str, content: str):
         """Create a new note"""
         # Save to Obsidian
-        file_path = self.obsidian.create_quick_note(title, content)
+        file_path = self.obsidian.save_quick_note(title, content)
         
         # Save to database
         db.add_quick_note(title, content, file_path)

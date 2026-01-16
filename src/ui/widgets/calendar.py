@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor
 
-from src.utils.styles import COLORS, FONT_FAMILY, get_button_style
+from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_nav_button_style
 from src.utils.constants import DAYS_ES_SHORT, MONTHS_ES
 
 
@@ -94,9 +94,8 @@ class MonthlyCalendar(QWidget):
         nav_layout = QHBoxLayout()
         
         self.prev_btn = QPushButton("<")
-        self.prev_btn.setFont(QFont(FONT_FAMILY, 10))
         self.prev_btn.setFixedSize(28, 28)
-        self.prev_btn.setStyleSheet(get_button_style())
+        self.prev_btn.setStyleSheet(get_nav_button_style())
         self.prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.prev_btn.clicked.connect(self._prev_month)
         nav_layout.addWidget(self.prev_btn)
@@ -108,9 +107,8 @@ class MonthlyCalendar(QWidget):
         nav_layout.addWidget(self.month_label, 1)
         
         self.next_btn = QPushButton(">")
-        self.next_btn.setFont(QFont(FONT_FAMILY, 10))
         self.next_btn.setFixedSize(28, 28)
-        self.next_btn.setStyleSheet(get_button_style())
+        self.next_btn.setStyleSheet(get_nav_button_style())
         self.next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.next_btn.clicked.connect(self._next_month)
         nav_layout.addWidget(self.next_btn)

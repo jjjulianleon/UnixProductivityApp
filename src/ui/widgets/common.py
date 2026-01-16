@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict
 from PyQt6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy
+    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMimeData
-from PyQt6.QtGui import QFont, QDrag, QCursor
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
+from PyQt6.QtGui import QFont, QDrag, QCursor, QPixmap, QPainter, QColor
 
 from src.utils.styles import (
     COLORS, FONT_FAMILY, get_button_style, get_card_style,
@@ -122,43 +122,88 @@ class DraggableTaskCard(TaskCard):
     def __init__(self, task: Dict, compact: bool = False, parent=None):
         super().__init__(task, compact, parent)
         self._drag_start_pos = None
+        self._is_dragging = False
         self.setAcceptDrops(True)
+    
+    def _create_drag_pixmap(self) -> QPixmap:
+        """Create a semi-transparent pixmap of the card for dragging"""
+        # Render the widget to a pixmap
+        pixmap = QPixmap(self.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setOpacity(0.85)
+        self.render(painter)
+        painter.end()
+        
+        return pixmap
     
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.pos()
-        super().mousePressEvent(event)
+            self._is_dragging = False
+        event.accept()
     
     def mouseMoveEvent(self, event):
         if not self._drag_start_pos:
             return
         
-        if (event.pos() - self._drag_start_pos).manhattanLength() < 20:
+        if self._is_dragging:
             return
         
+        distance = (event.pos() - self._drag_start_pos).manhattanLength()
+        if distance < 10:
+            return
+        
+        self._is_dragging = True
+        
         try:
+            import json
             drag = QDrag(self)
             mime_data = QMimeData()
             
             # Serialize task data
-            import json
-            task_json = json.dumps(self.task)
+            task_copy = {}
+            for k, v in self.task.items():
+                if isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                    task_copy[k] = v
+                else:
+                    task_copy[k] = str(v)
+            
+            task_json = json.dumps(task_copy)
             mime_data.setText(task_json)
             mime_data.setData("application/x-task", task_json.encode())
             
             drag.setMimeData(mime_data)
+            
+            # Create drag pixmap
+            pixmap = self._create_drag_pixmap()
+            drag.setPixmap(pixmap)
+            drag.setHotSpot(self._drag_start_pos)
+            
+            # Make original card semi-transparent while dragging
+            self.setStyleSheet(self.styleSheet().replace("150)", "80)"))
+            
             drag.exec(Qt.DropAction.MoveAction)
-        except RuntimeError:
+            
+            # Restore opacity
+            self.setStyleSheet(self.styleSheet().replace("80)", "150)"))
+            
+        except (RuntimeError, TypeError, json.JSONDecodeError):
             pass
         finally:
             self._drag_start_pos = None
+            self._is_dragging = False
     
     def mouseReleaseEvent(self, event):
+        was_click = not self._is_dragging and self._drag_start_pos is not None
         self._drag_start_pos = None
-        try:
-            super().mouseReleaseEvent(event)
-        except RuntimeError:
-            pass
+        self._is_dragging = False
+        
+        if was_click and event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self.task)
+        event.accept()
 
 
 class StatCard(QFrame):
@@ -174,7 +219,7 @@ class StatCard(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(50, 50, 55, 150);
-                border: 1px solid rgba({color}, 0.3);
+                border: none;
                 border-radius: 10px;
             }}
         """)

@@ -33,10 +33,8 @@ class PomodoroTimer(QWidget):
         self.sessions_completed = 0
         self.current_session_id = None
         
-        # Durations in seconds
-        self.work_duration = POMODORO_WORK_DURATION * 60
-        self.short_break = POMODORO_SHORT_BREAK * 60
-        self.long_break = POMODORO_LONG_BREAK * 60
+        # Load durations from settings or use defaults
+        self._load_durations()
         self.remaining_seconds = self.work_duration
         
         # Timer
@@ -44,6 +42,26 @@ class PomodoroTimer(QWidget):
         self.timer.timeout.connect(self._tick)
         
         self.setup_ui()
+    
+    def _load_durations(self):
+        """Load durations from database settings"""
+        settings = db.get_all_settings()
+        work_mins = settings.get('pomodoro_work', POMODORO_WORK_DURATION)
+        short_break_mins = settings.get('pomodoro_short_break', POMODORO_SHORT_BREAK)
+        long_break_mins = settings.get('pomodoro_long_break', POMODORO_LONG_BREAK)
+        self.sessions_before_long = settings.get('pomodoro_sessions', POMODORO_SESSIONS_BEFORE_LONG_BREAK)
+        
+        self.work_duration = int(work_mins) * 60
+        self.short_break = int(short_break_mins) * 60
+        self.long_break = int(long_break_mins) * 60
+    
+    def reload_settings(self):
+        """Reload settings from database (call after settings change)"""
+        self._load_durations()
+        if not self.is_running:
+            # Reset to work session with new duration
+            self.remaining_seconds = self.work_duration
+            self._update_display()
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -151,7 +169,7 @@ class PomodoroTimer(QWidget):
             color = COLORS['danger']
             session_text = "Trabajo"
         else:
-            total = self.short_break if self.sessions_completed % POMODORO_SESSIONS_BEFORE_LONG_BREAK != 0 else self.long_break
+            total = self.short_break if self.sessions_completed % self.sessions_before_long != 0 else self.long_break
             color = COLORS['success']
             session_text = "Descanso"
         
@@ -174,7 +192,7 @@ class PomodoroTimer(QWidget):
         """)
         
         if not self.compact:
-            self.sessions_label.setText(f"Sesiones: {self.sessions_completed}/{POMODORO_SESSIONS_BEFORE_LONG_BREAK}")
+            self.sessions_label.setText(f"Sesiones: {self.sessions_completed}/{self.sessions_before_long}")
     
     def _toggle_timer(self):
         """Start or pause the timer"""
@@ -212,7 +230,7 @@ class PomodoroTimer(QWidget):
         if self.is_work_session:
             self.remaining_seconds = self.work_duration
         else:
-            if self.sessions_completed % POMODORO_SESSIONS_BEFORE_LONG_BREAK == 0:
+            if self.sessions_completed % self.sessions_before_long == 0:
                 self.remaining_seconds = self.long_break
             else:
                 self.remaining_seconds = self.short_break
@@ -257,7 +275,7 @@ class PomodoroTimer(QWidget):
             
             # Switch to break
             self.is_work_session = False
-            if self.sessions_completed % POMODORO_SESSIONS_BEFORE_LONG_BREAK == 0:
+            if self.sessions_completed % self.sessions_before_long == 0:
                 self.remaining_seconds = self.long_break
             else:
                 self.remaining_seconds = self.short_break
