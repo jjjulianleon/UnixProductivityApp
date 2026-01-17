@@ -1,0 +1,12 @@
+# GTK4 Version Requirements
+# Install system dependencies first:
+#   Fedora: sudo dnf install gtk4-devel libadwaita-devel python3-gobject
+#   Ubuntu: sudo apt install libgtk-4-dev libadwaita-1-dev python3-gi
+
+PyGObject>=3.42.0
+pycairo>=1.20.0
+
+# Backend dependencies (shared with Qt version)
+icalendar>=5.0.0
+caldav>=1.0.0
+requests>=2.28.0
