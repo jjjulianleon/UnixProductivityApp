@@ -87,16 +87,9 @@ window.widget-mode {
   font-weight: bold;
 }
 
-.calendar-day.has-deadline::after {
-  content: "";
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: @danger_color;
+/* Note: has-deadline red dot is created programmatically, not via CSS */
+.calendar-day.has-deadline {
+  font-weight: bold;
 }
 
 /* ============== SCHEDULE ============== */

@@ -46,20 +46,12 @@ class MainWindow(Adw.ApplicationWindow):
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.set_content(main_box)
         
-        # Sidebar
-        sidebar = self._create_sidebar()
-        main_box.append(sidebar)
-        
         # Content area with navigation view
         self.content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.content_box.set_hexpand(True)
         self.content_box.set_vexpand(True)
         
-        # Header bar
-        header = self._create_header()
-        self.content_box.append(header)
-        
-        # Stack for views
+        # Stack for views - create FIRST so nav buttons can use it
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.stack.set_transition_duration(200)
@@ -91,6 +83,14 @@ class MainWindow(Adw.ApplicationWindow):
         
         self.schedule_view = WeeklySchedule()
         self.stack.add_titled(self.schedule_view, "schedule", "Horario")
+        
+        # NOW create sidebar (after stack exists)
+        sidebar = self._create_sidebar()
+        main_box.append(sidebar)
+        
+        # Header bar
+        header = self._create_header()
+        self.content_box.append(header)
         
         self.content_box.append(self.stack)
         main_box.append(self.content_box)
