@@ -83,30 +83,31 @@ Componentes:
 ## Requisitos
 
 - Python 3.10 o superior (desarrollado con 3.13)
-- PyQt6
+- PyQt6 >= 6.4.0
 - SQLite (incluido con Python)
 - Sistema operativo: Linux (optimizado para KDE Plasma/Wayland)
 - Fuente: Source Code Pro (recomendada)
 
-### Dependencias Opcionales
+### Dependencias de Integraciones
 
-- icalendar: Para integracion con calendarios ICS
-- requests: Para integraciones con Microsoft Teams y Brightspace D2L
+- **caldav >= 1.2.0**: Para sincronizacion con iCloud Calendar (CalDAV)
+- **icalendar >= 5.0.0**: Para importar calendarios ICS (Brightspace, Teams)
+- **requests >= 2.28.0**: Para obtener feeds ICS remotos
 
 ---
 
 ## Instalacion
 
-### Instalar dependencias base
+### Instalar todas las dependencias
 
 ```bash
-pip install PyQt6
+pip install -r requirements.txt
 ```
 
-### Dependencias opcionales
+### O instalar manualmente
 
 ```bash
-pip install icalendar requests
+pip install PyQt6>=6.4.0 caldav>=1.2.0 icalendar>=5.0.0 requests>=2.28.0
 ```
 
 ### Clonar o descargar el proyecto
@@ -116,6 +117,14 @@ cd ~/Desktop
 git clone <repositorio> CalendarWidget
 cd CalendarWidget
 ```
+
+### Desarrollo con Dev Container (opcional)
+
+El proyecto incluye configuracion de devcontainer para desarrollo en VS Code:
+
+1. Abrir el proyecto en VS Code
+2. Instalar la extension "Dev Containers"
+3. Ejecutar "Reopen in Container"
 
 ---
 
@@ -149,11 +158,18 @@ CalendarWidget/
 |-- main_app.py                 # Punto de entrada de la aplicacion principal
 |-- widget.py                   # Punto de entrada del widget de escritorio
 |-- calendar_widget.py          # Widget compacto (version alternativa)
+|-- icloud_integration.py       # Sincronizacion con iCloud Calendar (CalDAV)
+|-- ics_integration.py          # Integracion unificada ICS (Brightspace/Teams)
 |-- teams_integration.py        # Integracion con Microsoft Teams Graph API
-|-- brightspace_integration.py  # Integracion con Brightspace D2L
+|-- brightspace_integration.py  # Integracion con Brightspace D2L (API)
+|-- requirements.txt            # Dependencias del proyecto
 |-- README.md                   # Este archivo
 |-- Documentacion.md            # Documentacion tecnica completa
 |-- install.sh                  # Script de instalacion
+|
+|-- .devcontainer/              # Configuracion para desarrollo en contenedor
+|   |-- devcontainer.json
+|   |-- Dockerfile
 |
 |-- src/
 |   |-- __init__.py
@@ -174,14 +190,14 @@ CalendarWidget/
 |   |   |   |-- calendar.py     # Widget de calendario mensual
 |   |   |   |-- schedule.py     # Vista semanal estilo Teams (QPainter)
 |   |   |   |-- kanban.py       # Tablero Kanban con drag and drop
-|   |   |   |-- pomodoro.py     # Temporizador Pomodoro
+|   |   |   |-- pomodoro.py     # Temporizador Pomodoro configurable
 |   |   |   |-- quick_notes.py  # Widget de notas rapidas
 |   |   |   |-- common.py       # Componentes compartidos (tarjetas, etc)
 |   |   |
 |   |   |-- dialogs/
 |   |   |   |-- __init__.py
 |   |   |   |-- task_dialogs.py     # Dialogos de tareas y eventos
-|   |   |   |-- settings_dialog.py  # Dialogo de configuracion
+|   |   |   |-- settings_dialog.py  # Dialogo de configuracion con tabs
 |   |   |
 |   |   |-- views/
 |   |   |   |-- __init__.py
@@ -197,10 +213,13 @@ CalendarWidget/
 |
 |-- assets/
 |   |-- icons/                  # Iconos de la aplicacion
+|   |-- app_icon.svg            # Icono principal de la aplicacion
 |
-|-- tests/                      # Tests unitarios
+|-- tests/                      # Tests unitarios (43 tests)
+|   |-- test_database.py
+|   |-- test_obsidian_sync.py
 |
-|-- resources/                  # Recursos adicionales
+|-- resources/                  # Recursos adicionales (archivos ICS)
 ```
 
 ---

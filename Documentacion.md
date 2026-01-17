@@ -65,15 +65,13 @@ Estudiantes universitarios que usan:
 
 ### Dependencias Python
 
-**Requeridas:**
-```
-PyQt6>=6.0.0
-```
+**Archivo:** requirements.txt
 
-**Opcionales:**
 ```
-icalendar>=5.0.0    # Para importar calendarios ICS
-requests>=2.28.0    # Para APIs externas (Teams, Brightspace)
+PyQt6>=6.4.0        # Framework GUI principal
+caldav>=1.2.0       # Sincronizacion iCloud Calendar (CalDAV)
+icalendar>=5.0.0    # Parseo de calendarios ICS
+requests>=2.28.0    # Obtener feeds ICS remotos
 ```
 
 ### Rutas del Sistema
@@ -83,8 +81,10 @@ requests>=2.28.0    # Para APIs externas (Teams, Brightspace)
 | Base de datos | ~/.local/share/UnixProductivityApp/data.db |
 | Backups | ~/.local/share/UnixProductivityApp/backups/ |
 | Configuracion | ~/.config/UnixProductivityApp/ |
+| Config ICS | ~/.config/calendar_widget/ics_config.json |
+| Config iCloud | ~/.config/calendar_widget/icloud_config.json |
+| Cache ICS | ~/.config/calendar_widget/cache/ |
 | Token MS Teams | ~/.config/calendar_widget/ms_token.json |
-| Cache Brightspace | ~/.config/calendar_widget/brightspace_cache.json |
 
 ---
 
@@ -209,11 +209,14 @@ Todas las Views se actualizan
 ### Funcionalidades Parciales
 
 **Integraciones externas:**
-- [ ] Microsoft Teams Calendar (estructura lista, sin credenciales)
-- [ ] Brightspace D2L (estructura lista, sin credenciales)
-- [ ] Importacion ICS (implementado, no probado)
+- [x] iCloud Calendar via CalDAV (sincronizacion bidireccional)
+- [x] Importacion ICS unificada (Brightspace y Teams)
+- [ ] Microsoft Teams Calendar via Graph API (estructura lista, sin credenciales)
+- [ ] Brightspace D2L via API (estructura lista, sin credenciales)
 
 **UI:**
+- [x] Temporizador Pomodoro con duraciones configurables
+- [x] Dialogo de configuracion con tabs (General, Pomodoro, Integraciones)
 - [ ] Animaciones de transicion (basicas)
 - [ ] Combobox dropdowns con fondo oscuro (problema de Qt en Wayland)
 
@@ -280,6 +283,53 @@ Todas las Views se actualizan
 - Parse de calendario ICS
 - Cache de deadlines (30 minutos)
 - Conversion a formato interno
+
+### iCloud Calendar (CalDAV)
+
+**Archivo:** icloud_integration.py
+
+**Estado:** Funcional con configuracion
+
+**Clase principal:** ICloudSync
+
+**Configuracion:** ~/.config/calendar_widget/icloud_config.json
+
+**Funcionalidades:**
+- Conexion a iCloud via CalDAV
+- Obtener eventos del calendario
+- Sincronizar deadlines locales a iCloud
+- Sincronizar eventos del horario semanal a iCloud
+- Deteccion de eventos duplicados
+
+**Requisitos:**
+- Libreria caldav: `pip install caldav`
+- App-specific password de Apple
+
+---
+
+### Integracion ICS Unificada
+
+**Archivo:** ics_integration.py
+
+**Estado:** Funcional
+
+**Clases principales:**
+- ICSConfig: Gestor de configuracion
+- ICSParser: Parser de archivos/URLs ICS
+- BrightspaceIntegration: Deadlines de D2L
+- TeamsIntegration: Eventos de Teams/Outlook
+- ICSCalendarManager: Orquestador principal
+
+**Configuracion:** ~/.config/calendar_widget/ics_config.json
+
+**Funcionalidades:**
+- Parsear archivos ICS locales
+- Parsear URLs de feeds ICS
+- Deteccion automatica de cursos (CMP 4005, CMP 5002, etc.)
+- Categorizacion automatica de tipos de eventos (tarea, examen, proyecto)
+- Cache de eventos en disco
+
+---
 
 ### Obsidian
 
@@ -620,9 +670,10 @@ QDBusTrayIcon encountered a D-Bus error: QDBusError("org.freedesktop.DBus.Error.
 - [x] Kanban con drag-and-drop
 - [x] Calendario mensual
 - [x] Horario semanal
-- [x] Pomodoro
+- [x] Pomodoro con duraciones configurables
 - [x] Estadisticas
 - [x] Notas rapidas
+- [x] Dialogo de configuracion con tabs
 
 ### Fase 3 - Widget (COMPLETADA)
 
@@ -631,20 +682,24 @@ QDBusTrayIcon encountered a D-Bus error: QDBusError("org.freedesktop.DBus.Error.
 - [x] Arrastrable
 - [x] Siempre en escritorio
 
-### Fase 4 - Integraciones (EN PROGRESO)
+### Fase 4 - Integraciones (AVANZADO)
 
-- [x] Obsidian sync
-- [ ] Microsoft Teams Calendar
-- [ ] Brightspace D2L
+- [x] Obsidian sync (bidireccional)
+- [x] iCloud Calendar via CalDAV
+- [x] Importacion ICS (Brightspace D2L, Teams)
+- [x] Sincronizacion de deadlines a iCloud
+- [x] Sincronizacion de eventos locales a iCloud
+- [ ] Microsoft Teams via Graph API (pendiente credenciales)
 - [ ] Google Calendar export
 
-### Fase 5 - Pulido (PENDIENTE)
+### Fase 5 - Pulido (EN PROGRESO)
 
+- [x] Tests automatizados (43 tests passing)
+- [x] DevContainer para desarrollo
 - [ ] Animaciones suaves
 - [ ] Temas adicionales
 - [ ] Configuracion avanzada
 - [ ] Documentacion de usuario
-- [ ] Tests automatizados
 - [ ] Packaging (Flatpak/RPM)
 
 ### Fase 6 - Expansion (FUTURO)
