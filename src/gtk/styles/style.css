@@ -195,3 +195,40 @@ scrollbar slider {
 scrollbar slider:hover {
   background-color: alpha(white, 0.25);
 }
+
+/* ============== SIDEBAR FIXED ============== */
+.sidebar-button:active,
+.sidebar-button:checked,
+.sidebar-button.active {
+  background-color: @accent_bg_color;
+  color: @accent_color;
+}
+
+.sidebar togglebutton:checked {
+  background-color: @accent_bg_color;
+}
+
+/* ============== KANBAN DRAG ============== */
+.kanban-column.drag-hover {
+  background-color: alpha(@accent_color, 0.15);
+  border: 2px dashed @accent_color;
+}
+
+.task-card.priority-alta {
+  border-left-color: @danger_color;
+}
+
+.task-card.priority-media {
+  border-left-color: @warning_color;
+}
+
+.task-card.priority-baja {
+  border-left-color: @success_color;
+}
+
+/* Smooth transitions */
+.task-card,
+.kanban-column,
+.sidebar-button {
+  transition: all 200ms ease;
+}

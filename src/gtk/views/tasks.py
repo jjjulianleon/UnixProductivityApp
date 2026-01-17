@@ -172,5 +172,8 @@ class TasksView(Gtk.Box):
             
     def _on_task_clicked(self, row, task):
         """Show task details dialog"""
-        # TODO: Implement task detail dialog
-        print(f"Task clicked: {task.get('title')}")
+        from ..widgets.task_detail import TaskDetailDialog
+        dialog = TaskDetailDialog(task, parent=self.get_root())
+        dialog.connect("task-updated", lambda d: self.refresh())
+        dialog.present()
+

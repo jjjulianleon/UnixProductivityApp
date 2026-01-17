@@ -1,12 +1,11 @@
 """
-Kanban Board Widget - GTK4
-Drag and drop task management
+Kanban Board Widget - GTK4 with Drag and Drop
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
-from gi.repository import Gtk, Adw, GLib, Gdk
+from gi.repository import Gtk, Adw, GLib, Gdk, GObject
 import sys
 from pathlib import Path
 
@@ -14,40 +13,122 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
 
 
-class KanbanBoard(Gtk.Box):
-    """Kanban board with columns for task status"""
+class DraggableTaskCard(Gtk.Box):
+    """A draggable task card for the Kanban board"""
     
-    def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
-        self.set_margin_top(20)
-        self.set_margin_bottom(20)
-        self.set_margin_start(24)
-        self.set_margin_end(24)
+    __gsignals__ = {
+        'task-dropped': (GObject.SignalFlags.RUN_FIRST, None, (str, str)),
+    }
+    
+    def __init__(self, task: dict, current_status: str):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.task = task
+        self.current_status = current_status
+        self.task_id = task.get('id')
+        
+        self.add_css_class("task-card")
+        self.set_margin_start(4)
+        self.set_margin_end(4)
+        self.set_margin_top(4)
+        self.set_margin_bottom(4)
+        
+        # Priority class
+        priority = task.get('priority', 'media')
+        self.add_css_class(f"priority-{priority}")
+        
+        # Make draggable
+        drag_source = Gtk.DragSource()
+        drag_source.set_actions(Gdk.DragAction.MOVE)
+        drag_source.connect("prepare", self._on_drag_prepare)
+        drag_source.connect("drag-begin", self._on_drag_begin)
+        self.add_controller(drag_source)
+        
+        # Click to view details
+        click = Gtk.GestureClick()
+        click.connect("pressed", self._on_clicked)
+        self.add_controller(click)
         
         self._setup_ui()
-        self.refresh()
         
     def _setup_ui(self):
-        """Setup kanban columns"""
-        columns = [
-            ("pendiente", "Pendiente", "#4285f4"),
-            ("en progreso", "En Progreso", "#fbbc05"),
-            ("completado", "Completado", "#34a853"),
-        ]
+        """Setup card UI"""
+        # Title
+        title = Gtk.Label(label=self.task.get('title', ''))
+        title.set_halign(Gtk.Align.START)
+        title.set_wrap(True)
+        title.set_max_width_chars(25)
+        title.add_css_class("heading")
+        self.append(title)
         
-        self.columns = {}
+        # Subtitle row
+        subtitle_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         
-        for status, title, color in columns:
-            column = self._create_column(status, title, color)
-            column.set_hexpand(True)
-            self.columns[status] = column
-            self.append(column)
+        if self.task.get('category'):
+            cat_label = Gtk.Label(label=self.task['category'])
+            cat_label.add_css_class("dim-label")
+            cat_label.add_css_class("caption")
+            subtitle_box.append(cat_label)
             
-    def _create_column(self, status: str, title: str, color: str) -> Gtk.Box:
-        """Create a kanban column"""
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        column.add_css_class("kanban-column")
+        if self.task.get('deadline'):
+            deadline_label = Gtk.Label(label=f"📅 {self.task['deadline']}")
+            deadline_label.add_css_class("dim-label")
+            deadline_label.add_css_class("caption")
+            subtitle_box.append(deadline_label)
+            
+        self.append(subtitle_box)
         
+    def _on_drag_prepare(self, source, x, y):
+        """Prepare drag data"""
+        content = Gdk.ContentProvider.new_for_value(f"{self.task_id}:{self.current_status}")
+        return content
+        
+    def _on_drag_begin(self, source, drag):
+        """Visual feedback when drag starts"""
+        # Create a semi-transparent snapshot for drag icon
+        snapshot = Gtk.Snapshot()
+        self.snapshot(snapshot)
+        paintable = snapshot.to_paintable(None)
+        source.set_icon(paintable, 0, 0)
+        self.set_opacity(0.5)
+        
+    def _on_clicked(self, gesture, n_press, x, y):
+        """Open task detail dialog"""
+        if n_press == 1:
+            from .task_detail import TaskDetailDialog
+            dialog = TaskDetailDialog(self.task, parent=self.get_root())
+            dialog.connect("task-updated", self._on_task_updated)
+            dialog.present()
+            
+    def _on_task_updated(self, dialog):
+        """Refresh when task is updated"""
+        # Signal parent to refresh
+        parent = self.get_parent()
+        while parent and not isinstance(parent, KanbanBoard):
+            parent = parent.get_parent()
+        if parent:
+            parent.refresh()
+
+
+class KanbanColumn(Gtk.Box):
+    """A column in the Kanban board that accepts drops"""
+    
+    def __init__(self, status: str, title: str, color: str, board):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.status = status
+        self.board = board
+        self.add_css_class("kanban-column")
+        
+        # Drop target
+        drop_target = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+        drop_target.connect("drop", self._on_drop)
+        drop_target.connect("enter", self._on_drag_enter)
+        drop_target.connect("leave", self._on_drag_leave)
+        self.add_controller(drop_target)
+        
+        self._setup_ui(title, color)
+        
+    def _setup_ui(self, title: str, color: str):
+        """Setup column UI"""
         # Header
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         header.add_css_class("kanban-column-header")
@@ -68,147 +149,103 @@ class KanbanBoard(Gtk.Box):
         header.append(title_label)
         
         # Count badge
-        count_label = Gtk.Label(label="0")
-        count_label.add_css_class("dim-label")
-        header.append(count_label)
+        self.count_label = Gtk.Label(label="0")
+        self.count_label.add_css_class("dim-label")
+        header.append(self.count_label)
         
-        column.append(header)
+        self.append(header)
         
         # Task list
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         
-        task_list = Gtk.ListBox()
-        task_list.add_css_class("boxed-list")
-        task_list.set_selection_mode(Gtk.SelectionMode.NONE)
-        task_list.set_name(status)
-        scroll.set_child(task_list)
+        self.task_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        scroll.set_child(self.task_list)
         
-        column.append(scroll)
+        self.append(scroll)
         
-        # Store references
-        column.task_list = task_list
-        column.count_label = count_label
-        
-        return column
-        
-    def refresh(self):
-        """Refresh all columns"""
-        for status, column in self.columns.items():
-            self._refresh_column(status, column)
+    def _on_drop(self, target, value, x, y):
+        """Handle task drop"""
+        try:
+            task_id, from_status = value.split(":")
+            if from_status != self.status:
+                task_manager.update_task(int(task_id), status=self.status)
+                self.board.refresh()
+            return True
+        except Exception as e:
+            print(f"Drop error: {e}")
+            return False
             
-    def _refresh_column(self, status: str, column: Gtk.Box):
-        """Refresh a single column"""
-        task_list = column.task_list
+    def _on_drag_enter(self, target, x, y):
+        """Visual feedback on drag enter"""
+        self.add_css_class("drag-hover")
+        return Gdk.DragAction.MOVE
         
-        # Clear existing
+    def _on_drag_leave(self, target):
+        """Remove visual feedback"""
+        self.remove_css_class("drag-hover")
+        
+    def add_task(self, task: dict):
+        """Add a task card to this column"""
+        card = DraggableTaskCard(task, self.status)
+        self.task_list.append(card)
+        
+    def clear_tasks(self):
+        """Clear all tasks"""
         while True:
-            child = task_list.get_first_child()
+            child = self.task_list.get_first_child()
             if child:
-                task_list.remove(child)
+                self.task_list.remove(child)
             else:
                 break
                 
-        # Get tasks for this status
-        try:
-            tasks = task_manager.get_all_tasks(status=status)
-        except Exception as e:
-            print(f"Error loading tasks: {e}")
-            tasks = []
+    def update_count(self, count: int):
+        """Update task count"""
+        self.count_label.set_text(str(count))
+
+
+class KanbanBoard(Gtk.Box):
+    """Kanban board with drag and drop columns"""
+    
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        self.set_margin_top(20)
+        self.set_margin_bottom(20)
+        self.set_margin_start(24)
+        self.set_margin_end(24)
+        
+        self._setup_ui()
+        self.refresh()
+        
+    def _setup_ui(self):
+        """Setup kanban columns"""
+        columns_config = [
+            ("pendiente", "Pendiente", "#4285f4"),
+            ("en progreso", "En Progreso", "#fbbc05"),
+            ("completado", "Completado", "#34a853"),
+        ]
+        
+        self.columns = {}
+        
+        for status, title, color in columns_config:
+            column = KanbanColumn(status, title, color, self)
+            column.set_hexpand(True)
+            self.columns[status] = column
+            self.append(column)
             
-        # Update count
-        column.count_label.set_text(str(len(tasks)))
-        
-        if not tasks:
-            empty = Gtk.Label(label="Sin tareas")
-            empty.add_css_class("dim-label")
-            empty.set_margin_top(20)
-            task_list.append(empty)
-            return
+    def refresh(self):
+        """Refresh all columns"""
+        for status, column in self.columns.items():
+            column.clear_tasks()
             
-        for task in tasks:
-            row = self._create_task_card(task, status)
-            task_list.append(row)
+            try:
+                tasks = task_manager.get_all_tasks(status=status)
+            except Exception as e:
+                print(f"Error loading tasks: {e}")
+                tasks = []
+                
+            column.update_count(len(tasks))
             
-    def _create_task_card(self, task: dict, current_status: str) -> Gtk.Box:
-        """Create a draggable task card"""
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        card.add_css_class("task-card")
-        card.set_margin_start(4)
-        card.set_margin_end(4)
-        card.set_margin_top(4)
-        card.set_margin_bottom(4)
-        
-        # Priority class
-        priority = task.get('priority', 'media')
-        card.add_css_class(f"priority-{priority}")
-        
-        # Title
-        title = Gtk.Label(label=task.get('title', ''))
-        title.set_halign(Gtk.Align.START)
-        title.set_wrap(True)
-        title.set_max_width_chars(30)
-        card.append(title)
-        
-        # Subtitle row
-        subtitle_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        
-        if task.get('category'):
-            cat_label = Gtk.Label(label=task['category'])
-            cat_label.add_css_class("dim-label")
-            cat_label.add_css_class("caption")
-            subtitle_box.append(cat_label)
-            
-        if task.get('deadline'):
-            deadline_label = Gtk.Label(label=f"📅 {task['deadline']}")
-            deadline_label.add_css_class("dim-label")
-            deadline_label.add_css_class("caption")
-            subtitle_box.append(deadline_label)
-            
-        card.append(subtitle_box)
-        
-        # Action buttons
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        actions.set_margin_top(8)
-        
-        # Move buttons based on current status
-        if current_status != "pendiente":
-            left_btn = Gtk.Button()
-            left_btn.set_icon_name("go-previous-symbolic")
-            left_btn.add_css_class("flat")
-            left_btn.add_css_class("circular")
-            left_btn.set_tooltip_text("Mover a la izquierda")
-            left_btn.connect("clicked", self._on_move_left, task.get('id'), current_status)
-            actions.append(left_btn)
-            
-        if current_status != "completado":
-            right_btn = Gtk.Button()
-            right_btn.set_icon_name("go-next-symbolic")
-            right_btn.add_css_class("flat")
-            right_btn.add_css_class("circular")
-            right_btn.set_tooltip_text("Mover a la derecha")
-            right_btn.connect("clicked", self._on_move_right, task.get('id'), current_status)
-            actions.append(right_btn)
-            
-        card.append(actions)
-        
-        return card
-        
-    def _on_move_left(self, btn, task_id, current_status):
-        """Move task to previous column"""
-        status_order = ["pendiente", "en progreso", "completado"]
-        idx = status_order.index(current_status)
-        if idx > 0:
-            new_status = status_order[idx - 1]
-            task_manager.update_task(task_id, status=new_status)
-            self.refresh()
-            
-    def _on_move_right(self, btn, task_id, current_status):
-        """Move task to next column"""
-        status_order = ["pendiente", "en progreso", "completado"]
-        idx = status_order.index(current_status)
-        if idx < len(status_order) - 1:
-            new_status = status_order[idx + 1]
-            task_manager.update_task(task_id, status=new_status)
-            self.refresh()
+            for task in tasks:
+                column.add_task(task)

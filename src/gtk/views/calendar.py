@@ -1,6 +1,6 @@
 """
 Calendar View - GTK4
-Monthly calendar with deadline indicators
+Monthly calendar with deadline indicators (red dots) and circle for today
 """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -14,6 +14,68 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
+
+
+class DayButton(Gtk.Box):
+    """Custom day button with circle for today and red dot for deadlines"""
+    
+    def __init__(self, day: int, is_today: bool, has_deadline: bool, deadline_count: int = 0):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.day = day
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.CENTER)
+        self.set_size_request(40, 48)
+        
+        # Day number in a circle container
+        day_container = Gtk.Box()
+        day_container.set_halign(Gtk.Align.CENTER)
+        day_container.set_size_request(36, 36)
+        
+        day_label = Gtk.Label(label=str(day))
+        
+        if is_today:
+            # Perfect circle for today
+            css = Gtk.CssProvider()
+            css.load_from_data(b"""
+                box {
+                    background: @accent_color;
+                    border-radius: 50%;
+                    min-width: 36px;
+                    min-height: 36px;
+                }
+                label {
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+            day_container.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            day_label.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        day_container.append(day_label)
+        day_container.set_valign(Gtk.Align.CENTER)
+        day_container.set_halign(Gtk.Align.CENTER)
+        
+        # Center the label inside
+        day_label.set_halign(Gtk.Align.CENTER)
+        day_label.set_valign(Gtk.Align.CENTER)
+        
+        self.append(day_container)
+        
+        # Red dot indicator for deadlines
+        if has_deadline:
+            dot = Gtk.Box()
+            dot.set_size_request(6, 6)
+            dot.set_halign(Gtk.Align.CENTER)
+            css = Gtk.CssProvider()
+            css.load_from_data(b"box { background: #ea4335; border-radius: 50%; }")
+            dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            self.append(dot)
+            self.set_tooltip_text(f"{deadline_count} tarea(s)")
+        else:
+            # Spacer to maintain alignment
+            spacer = Gtk.Box()
+            spacer.set_size_request(6, 6)
+            self.append(spacer)
 
 
 class CalendarView(Gtk.Box):
@@ -166,31 +228,30 @@ class CalendarView(Gtk.Box):
                     label = Gtk.Label(label="")
                     self.calendar_grid.attach(label, col_idx, row_idx, 1, 1)
                 else:
-                    btn = self._create_day_button(day, today)
-                    self.calendar_grid.attach(btn, col_idx, row_idx, 1, 1)
+                    cell = self._create_day_cell(day, today)
+                    self.calendar_grid.attach(cell, col_idx, row_idx, 1, 1)
                     
-    def _create_day_button(self, day: int, today: datetime) -> Gtk.Button:
-        """Create a day button"""
-        btn = Gtk.Button(label=str(day))
-        btn.add_css_class("flat")
-        btn.add_css_class("calendar-day")
-        
+    def _create_day_cell(self, day: int, today: datetime) -> Gtk.Button:
+        """Create a day cell with proper styling"""
         # Check if today
         is_today = (day == today.day and 
                     self.current_date.month == today.month and 
                     self.current_date.year == today.year)
-        if is_today:
-            btn.add_css_class("today")
-            btn.add_css_class("suggested-action")
-            
+        
         # Check for deadlines
         date_str = f"{self.current_date.year}-{self.current_date.month:02d}-{day:02d}"
-        if date_str in self.deadlines:
-            btn.add_css_class("has-deadline")
-            # Add red dot indicator
-            btn.set_tooltip_text(f"{len(self.deadlines[date_str])} tarea(s)")
-            
+        has_deadline = date_str in self.deadlines
+        deadline_count = len(self.deadlines.get(date_str, []))
+        
+        # Create custom day widget
+        day_widget = DayButton(day, is_today, has_deadline, deadline_count)
+        
+        # Wrap in a button for click handling
+        btn = Gtk.Button()
+        btn.add_css_class("flat")
+        btn.set_child(day_widget)
         btn.connect("clicked", self._on_day_clicked, day)
+        
         return btn
         
     def _on_day_clicked(self, btn, day):
@@ -222,4 +283,13 @@ class CalendarView(Gtk.Box):
             row = Adw.ActionRow()
             row.set_title(task.get('title', ''))
             row.set_subtitle(task.get('category', ''))
+            row.set_activatable(True)
+            row.connect("activated", self._on_task_clicked, task)
             self.day_tasks_list.append(row)
+            
+    def _on_task_clicked(self, row, task):
+        """Open task detail"""
+        from ..widgets.task_detail import TaskDetailDialog
+        dialog = TaskDetailDialog(task, parent=self.get_root())
+        dialog.connect("task-updated", lambda d: self.refresh())
+        dialog.present()

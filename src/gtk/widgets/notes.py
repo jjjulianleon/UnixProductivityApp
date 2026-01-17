@@ -1,17 +1,144 @@
 """
 Quick Notes Widget - GTK4
-Simple note taking widget
+With click to view/edit notes
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
-from gi.repository import Gtk, Adw, GLib
+from gi.repository import Gtk, Adw, GLib, GObject
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
+
+
+class NoteDetailDialog(Adw.Window):
+    """Dialog to view and edit a note"""
+    
+    __gsignals__ = {
+        'note-updated': (GObject.SignalFlags.RUN_FIRST, None, ()),
+    }
+    
+    def __init__(self, note: dict = None, parent=None):
+        super().__init__()
+        self.note = note
+        self.note_id = note.get('id') if note else None
+        self.is_new = note is None
+        
+        self.set_title("Nueva Nota" if self.is_new else note.get('title', 'Nota'))
+        self.set_default_size(400, 400)
+        self.set_modal(True)
+        if parent:
+            self.set_transient_for(parent)
+            
+        self._setup_ui()
+        
+    def _setup_ui(self):
+        """Setup dialog UI"""
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.set_content(main_box)
+        
+        # Header bar
+        header = Adw.HeaderBar()
+        header.add_css_class("flat")
+        
+        close_btn = Gtk.Button(label="Cancelar")
+        close_btn.connect("clicked", lambda _: self.close())
+        header.pack_start(close_btn)
+        
+        save_btn = Gtk.Button(label="Guardar")
+        save_btn.add_css_class("suggested-action")
+        save_btn.connect("clicked", self._on_save)
+        header.pack_end(save_btn)
+        
+        if not self.is_new:
+            delete_btn = Gtk.Button()
+            delete_btn.set_icon_name("user-trash-symbolic")
+            delete_btn.add_css_class("destructive-action")
+            delete_btn.connect("clicked", self._on_delete)
+            header.pack_end(delete_btn)
+        
+        main_box.append(header)
+        
+        # Content
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content.set_margin_top(20)
+        content.set_margin_bottom(20)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+        
+        # Title
+        title_group = Adw.PreferencesGroup()
+        self.title_entry = Adw.EntryRow()
+        self.title_entry.set_title("Título")
+        if self.note:
+            self.title_entry.set_text(self.note.get('title', ''))
+        title_group.add(self.title_entry)
+        content.append(title_group)
+        
+        # Content
+        content_group = Adw.PreferencesGroup()
+        content_group.set_title("Contenido")
+        
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_min_content_height(200)
+        scroll.set_vexpand(True)
+        
+        self.content_view = Gtk.TextView()
+        self.content_view.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.content_view.add_css_class("card")
+        if self.note:
+            self.content_view.get_buffer().set_text(self.note.get('content', ''))
+        scroll.set_child(self.content_view)
+        content_group.add(scroll)
+        content.append(content_group)
+        
+        main_box.append(content)
+        
+    def _on_save(self, btn):
+        """Save the note"""
+        title = self.title_entry.get_text()
+        if not title:
+            self.title_entry.add_css_class("error")
+            return
+            
+        buffer = self.content_view.get_buffer()
+        start, end = buffer.get_bounds()
+        content = buffer.get_text(start, end, False)
+        
+        try:
+            if self.is_new:
+                task_manager.add_quick_note(title, content)
+            else:
+                task_manager.update_quick_note(self.note_id, title=title, content=content)
+            self.emit("note-updated")
+            self.close()
+        except Exception as e:
+            print(f"Error saving note: {e}")
+            
+    def _on_delete(self, btn):
+        """Delete note"""
+        dialog = Adw.MessageDialog(transient_for=self)
+        dialog.set_heading("Eliminar nota")
+        dialog.set_body(f"¿Eliminar '{self.note.get('title')}'?")
+        dialog.add_response("cancel", "Cancelar")
+        dialog.add_response("delete", "Eliminar")
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._on_delete_response)
+        dialog.present()
+        
+    def _on_delete_response(self, dialog, response):
+        """Handle delete response"""
+        if response == "delete":
+            try:
+                task_manager.delete_quick_note(self.note_id)
+                self.emit("note-updated")
+                self.close()
+            except Exception as e:
+                print(f"Error deleting note: {e}")
+        dialog.close()
 
 
 class QuickNotes(Gtk.Box):
@@ -65,25 +192,9 @@ class QuickNotes(Gtk.Box):
         
     def _on_add_note(self, btn):
         """Show add note dialog"""
-        dialog = AddNoteDialog(parent=self.get_root())
-        dialog.connect("response", self._on_note_dialog_response)
+        dialog = NoteDetailDialog(parent=self.get_root())
+        dialog.connect("note-updated", lambda d: self.refresh())
         dialog.present()
-        
-    def _on_note_dialog_response(self, dialog, response):
-        """Handle add note dialog response"""
-        if response == "save":
-            title = dialog.title_entry.get_text()
-            buffer = dialog.content_view.get_buffer()
-            start, end = buffer.get_bounds()
-            content = buffer.get_text(start, end, False)
-            
-            if title:
-                try:
-                    task_manager.add_quick_note(title, content)
-                    self.refresh()
-                except Exception as e:
-                    print(f"Error adding note: {e}")
-        dialog.close()
         
     def refresh(self):
         """Refresh notes"""
@@ -112,8 +223,12 @@ class QuickNotes(Gtk.Box):
             card = self._create_note_card(note)
             self.notes_flow.append(card)
             
-    def _create_note_card(self, note: dict) -> Gtk.Box:
-        """Create a note card"""
+    def _create_note_card(self, note: dict) -> Gtk.Button:
+        """Create a clickable note card"""
+        btn = Gtk.Button()
+        btn.add_css_class("flat")
+        btn.connect("clicked", self._on_note_clicked, note)
+        
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("note-card")
         card.set_size_request(250, 150)
@@ -137,58 +252,11 @@ class QuickNotes(Gtk.Box):
         content_label.set_vexpand(True)
         card.append(content_label)
         
-        # Actions
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        actions.set_halign(Gtk.Align.END)
+        btn.set_child(card)
+        return btn
         
-        delete_btn = Gtk.Button()
-        delete_btn.set_icon_name("user-trash-symbolic")
-        delete_btn.add_css_class("flat")
-        delete_btn.add_css_class("circular")
-        delete_btn.connect("clicked", self._on_delete_note, note.get('id'))
-        actions.append(delete_btn)
-        
-        card.append(actions)
-        
-        return card
-        
-    def _on_delete_note(self, btn, note_id):
-        """Delete a note"""
-        if note_id:
-            try:
-                task_manager.delete_quick_note(note_id)
-                self.refresh()
-            except Exception as e:
-                print(f"Error deleting note: {e}")
-
-
-class AddNoteDialog(Adw.MessageDialog):
-    """Dialog to add a new note"""
-    
-    def __init__(self, parent=None):
-        super().__init__()
-        self.set_heading("Nueva Nota")
-        self.set_transient_for(parent)
-        self.set_modal(True)
-        
-        self.add_response("cancel", "Cancelar")
-        self.add_response("save", "Guardar")
-        self.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
-        
-        # Content
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_margin_top(12)
-        
-        self.title_entry = Gtk.Entry()
-        self.title_entry.set_placeholder_text("Título")
-        box.append(self.title_entry)
-        
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_min_content_height(100)
-        
-        self.content_view = Gtk.TextView()
-        self.content_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        scroll.set_child(self.content_view)
-        box.append(scroll)
-        
-        self.set_extra_child(box)
+    def _on_note_clicked(self, btn, note):
+        """Open note for viewing/editing"""
+        dialog = NoteDetailDialog(note, parent=self.get_root())
+        dialog.connect("note-updated", lambda d: self.refresh())
+        dialog.present()
