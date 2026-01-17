@@ -615,6 +615,15 @@ class MainWindow(QMainWindow):
     
     def _quit_app(self):
         """Actually quit the application"""
+        # Sync to iCloud before quitting
+        try:
+            from src.core.task_manager import task_manager
+            result = task_manager.sync_to_icloud()
+            if result.get('created', 0) > 0:
+                print(f"☁️ Final iCloud sync: {result['created']} events synced")
+        except Exception as e:
+            print(f"Final iCloud sync error: {e}")
+        
         notification_manager.stop()
         QApplication.quit()
 

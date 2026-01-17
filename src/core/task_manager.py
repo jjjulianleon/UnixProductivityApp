@@ -134,6 +134,16 @@ class TaskManager:
             if new_tasks_count > 0:
                 signals.tasks_reloaded.emit()
                 signals.stats_updated.emit()
+            
+            # Sync deadlines to iCloud if configured
+            if self.icloud_sync and self.icloud_sync.config.get("enabled"):
+                try:
+                    deadlines = results.get('brightspace_deadlines', [])
+                    if deadlines:
+                        sync_result = self.icloud_sync.sync_deadlines_to_icloud(deadlines)
+                        print(f"☁️ iCloud sync: {sync_result.get('created', 0)} created, {sync_result.get('skipped', 0)} skipped")
+                except Exception as e:
+                    print(f"iCloud sync error: {e}")
                 
             # Collect external events
             all_external_events = []
@@ -176,6 +186,21 @@ class TaskManager:
         except Exception as e:
             print(f"Error syncing external calendars: {e}")
             signals.ics_error.emit(str(e))
+    
+    def sync_to_icloud(self):
+        """Sync current D2L deadlines to iCloud (called on app quit)"""
+        if not self.icloud_sync or not self.icloud_sync.config.get("enabled"):
+            return {'created': 0, 'skipped': 0, 'error': 'Not configured'}
+        try:
+            if self.ics_sync:
+                results = self.ics_sync.sync_all()
+                deadlines = results.get('brightspace_deadlines', [])
+                if deadlines:
+                    return self.icloud_sync.sync_deadlines_to_icloud(deadlines)
+        except Exception as e:
+            print(f"iCloud final sync error: {e}")
+            return {'created': 0, 'skipped': 0, 'error': str(e)}
+        return {'created': 0, 'skipped': 0}
     
     def add_task(self, title: str, category: str, description: str = "",
                  status: str = "pendiente", priority: str = "media",
