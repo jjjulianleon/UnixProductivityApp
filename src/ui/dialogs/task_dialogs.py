@@ -272,6 +272,8 @@ class TaskDetailDialog(QDialog):
             desc_label.setFont(QFont(FONT_FAMILY, 10))
             desc_label.setStyleSheet(f"color: rgb({COLORS['text_secondary']}); background: transparent;")
             desc_label.setWordWrap(True)
+            desc_label.setOpenExternalLinks(True)
+            desc_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.LinksAccessibleByMouse)
             desc_layout.addWidget(desc_label)
             
             desc_scroll.setWidget(desc_widget)

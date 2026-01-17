@@ -3,6 +3,8 @@ Quick Notes Widget
 """
 import os
 from datetime import datetime
+from pathlib import Path
+import re
 from typing import List, Dict, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -25,19 +27,46 @@ class QuickNoteDialog(QDialog):
     """Dialog to create a quick note"""
     
     note_created = pyqtSignal(str, str)  # title, content
+    note_updated = pyqtSignal(int, str, str, str) # id, title, content, path
     
-    def __init__(self, parent=None):
+    def __init__(self, note_data: Optional[Dict] = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Nueva Nota Rapida")
-        self.setFixedSize(400, 300)
+        self.note_data = note_data
+        self.is_edit = note_data is not None
+        
+        self.setWindowTitle("Editar Nota" if self.is_edit else "Nueva Nota Rapida")
+        self.setFixedSize(600, 450)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         self.setup_ui()
+        if self.is_edit:
+            self._load_data()
+            
+    def _load_data(self):
+        self.title_input.setText(self.note_data.get('title', ''))
+        
+        # Try to load content from file
+        path = self.note_data.get('file_path')
+        content = self.note_data.get('content', '')
+        
+        if path and os.path.exists(path):
+            try:
+                full_content = Path(path).read_text(encoding='utf-8')
+                # Try to strip header
+                parts = full_content.split('---', 2)
+                if len(parts) >= 3:
+                     content = parts[2].strip()
+                else:
+                     content = full_content
+            except Exception:
+                pass
+                
+        self.content_input.setText(content)
     
     def setup_ui(self):
         container = QFrame(self)
-        container.setGeometry(0, 0, 400, 300)
+        container.setGeometry(0, 0, 600, 450)
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 245);
@@ -51,7 +80,8 @@ class QuickNoteDialog(QDialog):
         layout.setSpacing(12)
         
         # Header
-        header = QLabel("Nueva Nota Rapida")
+        header_text = "Editar Nota" if self.is_edit else "Nueva Nota Rapida"
+        header = QLabel(header_text)
         header.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
         header.setStyleSheet(f"color: rgb({COLORS['primary']}); background: transparent;")
         layout.addWidget(header)
@@ -93,7 +123,17 @@ class QuickNoteDialog(QDialog):
             title = f"Nota {datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         content = self.content_input.toPlainText()
-        self.note_created.emit(title, content)
+        
+        if self.is_edit:
+            self.note_updated.emit(
+                self.note_data.get('id', 0) or 0,
+                title, 
+                content, 
+                self.note_data.get('file_path', '')
+            )
+        else:
+            self.note_created.emit(title, content)
+            
         self.accept()
 
 
@@ -280,18 +320,28 @@ class QuickNotesWidget(QWidget):
         
         # Refresh
         self._load_notes()
+        
+    def _update_note(self, note_id: int, title: str, content: str, file_path: str):
+        """Update existing note"""
+        # Update Obsidian
+        if file_path:
+            self.obsidian.update_quick_note(file_path, title, content)
+            
+        # Update DB
+        if note_id:
+            db.update_quick_note(note_id, title=title, content=content)
+            
+        # Emit signal
+        self.signals.note_updated.emit({'title': title, 'content': content})
+        self._load_notes()
     
     def _on_note_clicked(self, note: Dict):
-        """Handle note click"""
+        """Handle note click - Open Edit Dialog"""
         self.note_clicked.emit(note)
         
-        # Open in default editor if has file path
-        file_path = note.get('file_path')
-        if file_path and os.path.exists(file_path):
-            try:
-                os.system(f'xdg-open "{file_path}" &')
-            except:
-                pass
+        dialog = QuickNoteDialog(note_data=note, parent=self)
+        dialog.note_updated.connect(self._update_note)
+        dialog.exec()
     
     def refresh(self):
         """Refresh notes list"""

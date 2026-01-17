@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from src.utils.styles import (
-    COLORS, FONT_FAMILY, get_button_style, get_input_style
+    COLORS, FONT_FAMILY, get_button_style, get_input_style, get_groupbox_style
 )
 
 
@@ -23,7 +23,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         
         self.setWindowTitle("Configuracion")
-        self.setFixedSize(500, 450)
+        self.setFixedSize(700, 600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
@@ -66,7 +66,7 @@ class SettingsDialog(QDialog):
     
     def setup_ui(self):
         container = QFrame(self)
-        container.setGeometry(0, 0, 500, 450)
+        container.setGeometry(0, 0, 700, 600)
         container.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(30, 30, 35, 248);
@@ -387,7 +387,7 @@ class SettingsDialog(QDialog):
         
         # iCloud Group
         icloud_group = QGroupBox("iCloud Calendar (iPhone)")
-        icloud_group.setStyleSheet(self._get_group_style())
+        icloud_group.setStyleSheet(get_groupbox_style())
         icloud_layout = QGridLayout(icloud_group)
         icloud_layout.setSpacing(10)
         
@@ -426,7 +426,7 @@ class SettingsDialog(QDialog):
         
         # Brightspace Group
         bs_group = QGroupBox("Brightspace D2L (Universidad)")
-        bs_group.setStyleSheet(self._get_group_style())
+        bs_group.setStyleSheet(get_groupbox_style())
         bs_layout = QVBoxLayout(bs_group)
         bs_layout.setSpacing(10)
         

@@ -135,6 +135,8 @@ class ObsidianSync:
             task_line += f" [priority: {priority}]"
         if status == 'completado':
             task_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
+        elif status == 'en progreso':
+            task_line += " (en progreso)"
         task_line += "\n"
         
         # Add at the end
@@ -168,6 +170,8 @@ class ObsidianSync:
                     new_line += f" [priority: {new_priority}]"
                 if new_status == 'completado':
                     new_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
+                elif new_status == 'en progreso':
+                    new_line += " (en progreso)"
                 
                 new_lines.append(new_line)
             else:
@@ -230,3 +234,34 @@ Created: {datetime.now().strftime("%Y-%m-%d %H:%M")}
                 continue
         
         return sorted(notes, key=lambda x: x['modified'], reverse=True)
+        
+    def update_quick_note(self, file_path: str, title: str, content: str) -> bool:
+        """Update existing quick note"""
+        if not file_path or not os.path.exists(file_path):
+            return False
+            
+        try:
+            # Read creation time if possible
+            created_line = f"Created: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            existing_content = Path(file_path).read_text(encoding='utf-8')
+            match = re.search(r'Created: \d{4}-\d{2}-\d{2} \d{2}:\d{2}', existing_content)
+            if match:
+                created_line = match.group(0)
+
+            # Overwrite content
+            note_content = f"""# {title}
+
+{created_line}
+Updated: {datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+---
+
+{content}
+"""
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(note_content)
+                
+            return True
+        except Exception as e:
+            print(f"Error updating note: {e}")
+            return False

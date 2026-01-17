@@ -30,6 +30,13 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+try:
+    from icloud_integration import ICloudSync
+    HAS_ICLOUD = True
+except ImportError:
+    HAS_ICLOUD = False
+
+
 
 # ============== CONFIGURATION ==============
 CONFIG_DIR = Path.home() / ".config" / "calendar_widget"
@@ -162,14 +169,33 @@ class ICSParser:
                 return None
                 
             dtstart = component.get('DTSTART')
-            dtend = component.get('DTEND')
+            # Parse date
+            dt_start = component.get('dtstart').dt
             
-            if not dtstart:
-                return None
+            # Handle deadlines (using End Date often implies the due time)
+            dt_end = component.get('dtend')
+            target_dt = dt_end.dt if dt_end else dt_start
+            
+            # Convert to local timezone if it's a datetime object
+            if isinstance(target_dt, datetime):
+                # If it has a timezone (e.g. UTC), convert to local system time
+                if target_dt.tzinfo is not None:
+                    target_dt = target_dt.astimezone()
                 
-            # Handle different date types
+                # If it's naive, we assume it's already local, or we can force it 
+                # but typically libraries return naive for local or aware for UTC.
+                # .astimezone() on a naive object (in Python 3) assumes local system time, 
+                # so it's safe to just use the result for string formatting.
+                
+                deadline_str = target_dt.strftime('%Y-%m-%d')
+                
+                # Debug logging
+                # print(f"Original: {component.get('dtend').dt}, Local: {target_dt}, Str: {deadline_str}")
+            else:
+                # It's already a date object (all-day event)
+                deadline_str = target_dt.strftime('%Y-%m-%d')
             start_dt = self._normalize_datetime(dtstart.dt)
-            end_dt = self._normalize_datetime(dtend.dt) if dtend else start_dt
+            end_dt = self._normalize_datetime(dt_end.dt) if dt_end else start_dt
             
             # Extract other fields
             description = str(component.get('DESCRIPTION', '') or '')
@@ -187,6 +213,7 @@ class ICSParser:
                 'end': end_dt.isoformat() if end_dt else None,
                 'description': description[:500],  # Limit description length
                 'location': location,
+                'url': str(component.get('URL', '') or ''),
                 'is_recurring': is_recurring,
                 'all_day': not hasattr(dtstart.dt, 'hour'),
                 'raw_rrule': str(rrule) if rrule else None
@@ -270,6 +297,7 @@ class BrightspaceIntegration:
                 'color': course_info.get('color', '66, 133, 244'),
                 'type': event_type,
                 'description': event.get('description', ''),
+                'url': event.get('url', ''),
                 'source': 'brightspace'
             })
             
@@ -393,11 +421,17 @@ class UnifiedCalendarSync:
         self.brightspace = BrightspaceIntegration(self.config)
         self.teams = TeamsIntegration(self.config)
         
+        if HAS_ICLOUD:
+            self.icloud = ICloudSync()
+        else:
+            self.icloud = None
+        
     def sync_all(self) -> Dict[str, List[Dict]]:
         """Synchronize all calendar sources"""
         result = {
             'brightspace_deadlines': [],
             'teams_events': [],
+            'icloud_events': [],
             'errors': []
         }
         
@@ -415,6 +449,23 @@ class UnifiedCalendarSync:
             except Exception as e:
                 result['errors'].append(f"Teams: {str(e)}")
                 
+        # Sync iCloud (read events)
+        if self.icloud and self.icloud.config.get("enabled", False):
+            try:
+                # Sync next 30 days
+                start = datetime.now()
+                end = start + timedelta(days=30)
+                result['icloud_events'] = self.icloud.get_events(start, end)
+                
+                # Upload D2L deadlines to iCloud (bidirectional sync)
+                if result['brightspace_deadlines']:
+                    sync_result = self.icloud.sync_deadlines_to_icloud(result['brightspace_deadlines'])
+                    if sync_result.get('created', 0) > 0:
+                        print(f"✅ Synced {sync_result['created']} deadlines to iCloud")
+                        
+            except Exception as e:
+                result['errors'].append(f"iCloud: {str(e)}")
+                
         # Update last sync time
         self.config.set("last_sync", datetime.now().isoformat())
         
@@ -431,8 +482,39 @@ class UnifiedCalendarSync:
         ]
         
     def get_upcoming_events(self, days: int = 7) -> List[Dict]:
-        """Get Teams events for the next N days"""
-        return self.teams.get_events(days_ahead=days)
+        """Get combined events (Teams + iCloud) for the next N days"""
+        # Teams events
+        teams_events = self.teams.get_events(days_ahead=days)
+        
+        # iCloud events
+        icloud_events = []
+        if self.icloud and self.icloud.config.get("enabled", False):
+            try:
+                start = datetime.now()
+                end = start + timedelta(days=days)
+                raw_events = self.icloud.get_events(start, end)
+                
+                # Format to match Teams structure
+                for ev in raw_events:
+                    icloud_events.append({
+                        'uid': ev['uid'],
+                        'title': ev['title'],
+                        'start': ev['start_time'].isoformat(),
+                        'end': ev['end_time'].isoformat(),
+                        'location': ev['location'],
+                        'is_meeting': False, # Unless detected
+                        'is_recurring': False, # Handled by CalDAV expansion
+                        'source': 'icloud',
+                        'color': '52, 168, 83' # Green for iCloud
+                    })
+            except Exception:
+                pass
+                
+        # Combine and sort
+        all_events = teams_events + icloud_events
+        all_events.sort(key=lambda x: x['start'])
+        
+        return all_events
         
     def refresh_teams_ics(self) -> bool:
         """Download fresh ICS from Teams URL"""

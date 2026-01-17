@@ -11,7 +11,11 @@ from PyQt6.QtCore import Qt, pyqtSignal, QRectF
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen, QMouseEvent
 
 from src.utils.styles import COLORS, FONT_FAMILY, get_nav_button_style
-from src.utils.constants import DAYS_ES_SHORT, SCHEDULE_START_HOUR, SCHEDULE_END_HOUR
+from src.utils.styles import COLORS, FONT_FAMILY, get_nav_button_style
+from src.utils.constants import (
+    DAYS_ES_SHORT, SCHEDULE_START_HOUR, SCHEDULE_END_HOUR,
+    SEMESTER_START, SEMESTER_END, INTERNSHIP_END
+)
 from src.core.database import db
 
 
@@ -434,13 +438,32 @@ class WeeklySchedule(QWidget):
     def _load_events(self):
         """Load schedule events from database and external sources"""
         # 1. Load DB events (recurring weekly)
-        events = db.get_schedule_events()
+        # Filter by semester dates (Jan 12 - May 16)
+        # Check if ANY day of the current week falls within the semester
+        week_end_date = self.week_start + timedelta(days=6)
+        # Ranges overlap if (StartA <= EndB) and (EndA >= StartB)
+        is_in_semester = (self.week_start <= SEMESTER_END) and (week_end_date >= SEMESTER_START)
+        
+        events = []
+        if is_in_semester:
+            events = db.get_schedule_events()
         
         # Group by day
         by_day: Dict[int, List] = {i: [] for i in range(7)}
+        
+        # Check if current week is after internship end date
+        is_after_internship = self.week_start > INTERNSHIP_END
+        
         for evt in events:
             day = evt.get('day_of_week', 0)
             if 0 <= day < 7:
+                # Filter out internship/work events after Feb 14
+                title_lower = evt.get('title', '').lower()
+                is_internship_event = any(kw in title_lower for kw in ['pasant', 'trabajo', 'intern', 'work', 'pasec'])
+                
+                if is_internship_event and is_after_internship:
+                    continue  # Skip internship events after the deadline
+                    
                 evt['is_internal'] = True
                 by_day[day].append(evt)
         
@@ -453,6 +476,21 @@ class WeeklySchedule(QWidget):
                 
             try:
                 start_dt = datetime.fromisoformat(ext_evt['start'].replace('Z', ''))
+                
+                # Filter Internship events (Until Feb 14)
+                # Heuristic: Teams events often related to work/internship unless specified otherwise
+                # Keywords: pasantia, internship, trabajo, meeting
+                title_lower = ext_evt.get('title', '').lower()
+                is_start_after_internship = start_dt > INTERNSHIP_END
+                
+                # If it's after Feb 14 and seems like an internship event or generic meeting, skip
+                # Assuming generic Teams events are internship related
+                if is_start_after_internship and ext_evt.get('source') == 'teams':
+                   # But keep it if it looks like a class (has course code pattern)
+                   import re
+                   if not re.search(r'[A-Z]{3}\s\d{4}', ext_evt.get('title', '')):
+                       continue
+
                 
                 # Check if event falls in current week
                 if self.week_start <= start_dt < week_end:

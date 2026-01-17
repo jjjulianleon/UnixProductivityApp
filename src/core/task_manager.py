@@ -106,13 +106,24 @@ class TaskManager:
                     if dl.get('type') and dl['type'] != 'other':
                         tags.append(dl['type'])
                         
+                        
                     tag_str = f"[{', '.join(tags)}]"
+                    
+                    # Prepare description with URL
+                    raw_desc = dl.get('description', '')
+                    url = dl.get('url', '')
+                    if url:
+                        final_desc = f"Ver evento: {url}\n\n{raw_desc}"
+                    else:
+                        final_desc = raw_desc
+                        
+                    final_desc += f"\n\n[Materia: {dl.get('course_name', 'Unknown')}]"
                     
                     # Add task
                     db.add_task(
                         title=dl['title'],
                         category="Universidad",  # Force category
-                        description=f"{dl.get('description', '')}\n\n[Materia: {dl.get('course_name', 'Unknown')}]",
+                        description=final_desc,
                         status="pendiente",
                         priority="alta" if dl.get('type') in ['exam', 'project'] else "media",
                         deadline=deadline_date,

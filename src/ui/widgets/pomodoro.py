@@ -6,15 +6,23 @@ from PyQt6.QtWidgets import (
     QFrame, QProgressBar, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QAction
 
-from src.utils.styles import COLORS, FONT_FAMILY, get_button_style
+from src.utils.styles import COLORS, FONT_FAMILY, get_button_style, get_menu_style
 from src.utils.constants import (
     POMODORO_WORK_DURATION, POMODORO_SHORT_BREAK, 
     POMODORO_LONG_BREAK, POMODORO_SESSIONS_BEFORE_LONG_BREAK
 )
 from src.core.database import db
 from src.core.signals import SignalHub
+
+
+class ClickableLabel(QLabel):
+    clicked = pyqtSignal()
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
 
 
 class PomodoroTimer(QWidget):
@@ -77,8 +85,12 @@ class PomodoroTimer(QWidget):
             header.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(header)
         
+        
         # Timer display
-        self.time_label = QLabel(self._format_time())
+        self.time_label = ClickableLabel(self._format_time())
+        self.time_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.time_label.setToolTip("Click para cambiar duracion")
+        self.time_label.clicked.connect(self._show_time_menu)
         font_size = 24 if self.compact else 36
         self.time_label.setFont(QFont(FONT_FAMILY, font_size, QFont.Weight.Bold))
         self.time_label.setStyleSheet(f"color: rgb({COLORS['text_primary']}); background: transparent;")
@@ -128,7 +140,7 @@ class PomodoroTimer(QWidget):
         self.reset_btn.setFont(QFont(FONT_FAMILY, 9))
         self.reset_btn.setStyleSheet(get_button_style())
         self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reset_btn.setFixedWidth(60)
+        self.reset_btn.setFixedWidth(80)
         self.reset_btn.clicked.connect(self._reset)
         controls_layout.addWidget(self.reset_btn)
         
@@ -298,6 +310,31 @@ class PomodoroTimer(QWidget):
             'completed': len(pomodoros),
             'total_minutes': len(pomodoros) * POMODORO_WORK_DURATION
         }
+        
+    def _show_time_menu(self):
+        """Show menu to select duration"""
+        if self.is_running:
+            return
+            
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet(get_menu_style())
+        
+        menu.addAction("Trabajo (25m)", lambda: self._set_custom_time(25, True))
+        menu.addAction("Trabajo Largo (50m)", lambda: self._set_custom_time(50, True))
+        menu.addSeparator()
+        menu.addAction("Descanso Corto (5m)", lambda: self._set_custom_time(5, False))
+        menu.addAction("Descanso Largo (15m)", lambda: self._set_custom_time(15, False))
+        
+        # Position menu at center of label
+        menu.exec(self.time_label.mapToGlobal(self.time_label.rect().center()))
+        
+    def _set_custom_time(self, minutes: int, is_work: bool):
+        """Set custom time duration"""
+        self.is_work_session = is_work
+        self.remaining_seconds = minutes * 60
+        self.work_duration = minutes * 60 # Update "work duration" temporarily if needed
+        self._update_display()
 
 
 class MiniPomodoro(PomodoroTimer):

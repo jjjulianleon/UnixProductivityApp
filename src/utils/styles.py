@@ -58,6 +58,7 @@ def get_main_window_style():
             font-family: "{FONT_FAMILY}";
             color: rgb({COLORS['text_primary']});
         }}
+        {get_scrollbar_style()}
     """
 
 def get_widget_style():
@@ -450,5 +451,23 @@ def get_menu_style():
         QMenu::indicator {{
             width: 16px;
             height: 16px;
+        }}
+    """
+
+def get_groupbox_style():
+    return f"""
+        QGroupBox {{
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-top: 1.5em; /* leave space at the top for the title */
+            padding-top: 10px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 10px;
+            padding: 0 5px;
+            color: rgb({COLORS['primary']});
+            font-weight: bold;
         }}
     """

@@ -163,3 +163,119 @@ class ICloudSync:
         # Note: robust update by UID requires searching first
         # For MVP, we might need the dav_object from a previous fetch
         return False  # To be implemented
+    
+    def event_exists(self, title: str, start: datetime) -> bool:
+        """Check if an event with similar title and start time already exists"""
+        if not self.connected and not self.connect():
+            return False
+            
+        try:
+            # Search for events on that day
+            end = start + timedelta(days=1)
+            events = self.calendar.date_search(start=start, end=end, expand=True)
+            
+            for event in events:
+                vevent = event.instance.vevent
+                existing_title = str(vevent.summary.value).lower()
+                existing_start = vevent.dtstart.value
+                
+                # Fuzzy match on title and exact match on date
+                if title.lower()[:20] in existing_title or existing_title in title.lower()[:20]:
+                    return True
+                    
+            return False
+        except Exception:
+            return False
+    
+    def sync_deadlines_to_icloud(self, deadlines: list) -> dict:
+        """
+        Sync D2L/Brightspace deadlines to iCloud Calendar.
+        Returns count of created/skipped events.
+        """
+        if not self.connected and not self.connect():
+            return {'created': 0, 'skipped': 0, 'error': 'Not connected'}
+            
+        created = 0
+        skipped = 0
+        
+        for dl in deadlines:
+            try:
+                title = f"📚 {dl.get('title', 'Tarea')}"
+                course = dl.get('tag', dl.get('course_name', ''))
+                if course:
+                    title = f"📚 [{course}] {dl.get('title', 'Tarea')}"
+                
+                due_date_str = dl.get('due_date', '')
+                if not due_date_str:
+                    skipped += 1
+                    continue
+                    
+                due_dt = datetime.fromisoformat(due_date_str)
+                
+                # Check if already exists
+                if self.event_exists(dl.get('title', ''), due_dt):
+                    skipped += 1
+                    continue
+                
+                # Create as all-day event or with specific time
+                # D2L deadlines usually have a specific time
+                end_dt = due_dt + timedelta(hours=1)
+                
+                description = dl.get('description', '')
+                url = dl.get('url', '')
+                location = f"D2L - {course}" if course else "D2L Brightspace"
+                
+                if self.add_event(title, due_dt, end_dt, location):
+                    created += 1
+                else:
+                    skipped += 1
+                    
+            except Exception as e:
+                print(f"Error syncing deadline to iCloud: {e}")
+                skipped += 1
+                
+        return {'created': created, 'skipped': skipped}
+    
+    def sync_local_events_to_icloud(self, events: list, week_start: datetime) -> dict:
+        """
+        Sync local schedule events to iCloud for a specific week.
+        """
+        if not self.connected and not self.connect():
+            return {'created': 0, 'skipped': 0, 'error': 'Not connected'}
+            
+        created = 0
+        skipped = 0
+        
+        for evt in events:
+            try:
+                title = evt.get('title', 'Evento')
+                day_of_week = evt.get('day_of_week', 0)
+                start_time = evt.get('start_time', '09:00')
+                end_time = evt.get('end_time', '10:00')
+                
+                # Calculate actual date
+                event_date = week_start + timedelta(days=day_of_week)
+                
+                # Parse times
+                start_h, start_m = map(int, start_time.split(':'))
+                end_h, end_m = map(int, end_time.split(':'))
+                
+                start_dt = event_date.replace(hour=start_h, minute=start_m)
+                end_dt = event_date.replace(hour=end_h, minute=end_m)
+                
+                # Check if exists
+                if self.event_exists(title, start_dt):
+                    skipped += 1
+                    continue
+                
+                if self.add_event(title, start_dt, end_dt):
+                    created += 1
+                else:
+                    skipped += 1
+                    
+            except Exception as e:
+                print(f"Error syncing local event to iCloud: {e}")
+                skipped += 1
+                
+        return {'created': created, 'skipped': skipped}
+

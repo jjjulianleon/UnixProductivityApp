@@ -8,6 +8,12 @@ APP_NAME = "UnixProductivityApp"
 APP_VERSION = "1.0.0"
 APP_AUTHOR = "Julian Leon"
 
+# Semester Constraints (2026)
+from datetime import datetime
+SEMESTER_START = datetime(2026, 1, 12)
+SEMESTER_END = datetime(2026, 5, 16)
+INTERNSHIP_END = datetime(2026, 2, 14)
+
 # Paths
 DATA_DIR = Path.home() / ".local" / "share" / APP_NAME
 CONFIG_DIR = Path.home() / ".config" / APP_NAME
