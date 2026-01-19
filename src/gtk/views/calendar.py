@@ -132,6 +132,10 @@ class CalendarView(Gtk.Box):
             print(f"Calendar refresh error: {e}")
         self._update_calendar()
         
+        # Auto-show today's tasks
+        today = datetime.now()
+        self._show_day_tasks(today.day)
+        
     def _update_calendar(self):
         months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -213,6 +217,11 @@ class CalendarView(Gtk.Box):
         return btn
         
     def _on_day_clicked(self, btn, day):
+        """Handle day button click"""
+        self._show_day_tasks(day)
+        
+    def _show_day_tasks(self, day: int):
+        """Display tasks for a specific day in the sidebar"""
         date_str = f"{self.current_date.year}-{self.current_date.month:02d}-{day:02d}"
         self.selected_date_label.set_text(f"Tareas - {day}/{self.current_date.month}")
         

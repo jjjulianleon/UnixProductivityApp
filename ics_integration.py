@@ -178,19 +178,18 @@ class ICSParser:
             
             # Convert to local timezone if it's a datetime object
             if isinstance(target_dt, datetime):
-                # If it has a timezone (e.g. UTC), convert to local system time
+                # For DEADLINE purposes, we want the DATE the university set,
+                # NOT the local time conversion (which can shift to previous day)
+                # If the event is in UTC, the university meant that DATE.
+                
                 if target_dt.tzinfo is not None:
-                    target_dt = target_dt.astimezone()
-                
-                # If it's naive, we assume it's already local, or we can force it 
-                # but typically libraries return naive for local or aware for UTC.
-                # .astimezone() on a naive object (in Python 3) assumes local system time, 
-                # so it's safe to just use the result for string formatting.
-                
-                deadline_str = target_dt.strftime('%Y-%m-%d')
-                
-                # Debug logging
-                # print(f"Original: {component.get('dtend').dt}, Local: {target_dt}, Str: {deadline_str}")
+                    # Keep the DATE as-is from UTC (don't shift to previous day)
+                    # This is correct for deadline dates like "Due Jan 26" 
+                    # which should show as Jan 26 regardless of timezone
+                    deadline_str = target_dt.strftime('%Y-%m-%d')  # Use UTC date directly
+                else:
+                    # Naive datetime - use as-is
+                    deadline_str = target_dt.strftime('%Y-%m-%d')
             else:
                 # It's already a date object (all-day event)
                 deadline_str = target_dt.strftime('%Y-%m-%d')
