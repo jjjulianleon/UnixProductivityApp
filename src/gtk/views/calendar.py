@@ -1,6 +1,6 @@
 """
 Calendar View - GTK4
-Monthly calendar with deadline indicators (red dots) and circle for today
+Monthly calendar with centered circles and dots
 """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -16,68 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
 
 
-class DayButton(Gtk.Box):
-    """Custom day button with circle for today and red dot for deadlines"""
-    
-    def __init__(self, day: int, is_today: bool, has_deadline: bool, deadline_count: int = 0):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.day = day
-        self.set_halign(Gtk.Align.CENTER)
-        self.set_valign(Gtk.Align.CENTER)
-        self.set_size_request(40, 48)
-        
-        # Day number in a circle container
-        day_container = Gtk.Box()
-        day_container.set_halign(Gtk.Align.CENTER)
-        day_container.set_size_request(36, 36)
-        
-        day_label = Gtk.Label(label=str(day))
-        
-        if is_today:
-            # Perfect circle for today
-            css = Gtk.CssProvider()
-            css.load_from_data(b"""
-                box {
-                    background: @accent_color;
-                    border-radius: 50%;
-                    min-width: 36px;
-                    min-height: 36px;
-                }
-                label {
-                    color: white;
-                    font-weight: bold;
-                }
-            """)
-            day_container.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            day_label.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        
-        day_container.append(day_label)
-        day_container.set_valign(Gtk.Align.CENTER)
-        day_container.set_halign(Gtk.Align.CENTER)
-        
-        # Center the label inside
-        day_label.set_halign(Gtk.Align.CENTER)
-        day_label.set_valign(Gtk.Align.CENTER)
-        
-        self.append(day_container)
-        
-        # Red dot indicator for deadlines
-        if has_deadline:
-            dot = Gtk.Box()
-            dot.set_size_request(6, 6)
-            dot.set_halign(Gtk.Align.CENTER)
-            css = Gtk.CssProvider()
-            css.load_from_data(b"box { background: #ea4335; border-radius: 50%; }")
-            dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            self.append(dot)
-            self.set_tooltip_text(f"{deadline_count} tarea(s)")
-        else:
-            # Spacer to maintain alignment
-            spacer = Gtk.Box()
-            spacer.set_size_request(6, 6)
-            self.append(spacer)
-
-
 class CalendarView(Gtk.Box):
     """Monthly calendar view"""
     
@@ -90,13 +28,12 @@ class CalendarView(Gtk.Box):
         self.set_spacing(24)
         
         self.current_date = datetime.now()
-        self.deadlines = {}  # {date_str: [tasks]}
+        self.deadlines = {}
         
         self._setup_ui()
         self.refresh()
         
     def _setup_ui(self):
-        """Setup calendar UI"""
         # Left: Calendar grid
         calendar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         calendar_box.add_css_class("glass-card")
@@ -139,7 +76,7 @@ class CalendarView(Gtk.Box):
         self.calendar_grid = Gtk.Grid()
         self.calendar_grid.set_column_homogeneous(True)
         self.calendar_grid.set_row_homogeneous(True)
-        self.calendar_grid.set_row_spacing(4)
+        self.calendar_grid.set_row_spacing(8)
         self.calendar_grid.set_column_spacing(4)
         calendar_box.append(self.calendar_grid)
         
@@ -168,7 +105,6 @@ class CalendarView(Gtk.Box):
         self.append(tasks_box)
         
     def _prev_month(self, btn):
-        """Go to previous month"""
         if self.current_date.month == 1:
             self.current_date = self.current_date.replace(year=self.current_date.year - 1, month=12)
         else:
@@ -176,7 +112,6 @@ class CalendarView(Gtk.Box):
         self._update_calendar()
         
     def _next_month(self, btn):
-        """Go to next month"""
         if self.current_date.month == 12:
             self.current_date = self.current_date.replace(year=self.current_date.year + 1, month=1)
         else:
@@ -184,8 +119,6 @@ class CalendarView(Gtk.Box):
         self._update_calendar()
         
     def refresh(self):
-        """Refresh calendar data"""
-        # Load deadlines
         self.deadlines = {}
         try:
             tasks = task_manager.get_tasks_with_deadlines()
@@ -197,79 +130,95 @@ class CalendarView(Gtk.Box):
                     self.deadlines[date_str].append(task)
         except Exception as e:
             print(f"Calendar refresh error: {e}")
-            
         self._update_calendar()
         
     def _update_calendar(self):
-        """Update calendar grid"""
-        # Update month label
         months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
         self.month_label.set_text(f"{months[self.current_date.month - 1]} {self.current_date.year}")
         
         # Clear grid
-        while True:
-            child = self.calendar_grid.get_first_child()
-            if child:
-                self.calendar_grid.remove(child)
-            else:
-                break
+        while child := self.calendar_grid.get_first_child():
+            self.calendar_grid.remove(child)
                 
-        # Get calendar data
-        cal = calendar.Calendar(firstweekday=0)  # Monday first
+        cal = calendar.Calendar(firstweekday=0)
         month_days = cal.monthdayscalendar(self.current_date.year, self.current_date.month)
-        
         today = datetime.now()
         
         for row_idx, week in enumerate(month_days):
             for col_idx, day in enumerate(week):
                 if day == 0:
-                    # Empty cell
-                    label = Gtk.Label(label="")
-                    self.calendar_grid.attach(label, col_idx, row_idx, 1, 1)
+                    self.calendar_grid.attach(Gtk.Label(label=""), col_idx, row_idx, 1, 1)
                 else:
                     cell = self._create_day_cell(day, today)
                     self.calendar_grid.attach(cell, col_idx, row_idx, 1, 1)
                     
     def _create_day_cell(self, day: int, today: datetime) -> Gtk.Button:
-        """Create a day cell with proper styling"""
-        # Check if today
         is_today = (day == today.day and 
                     self.current_date.month == today.month and 
                     self.current_date.year == today.year)
         
-        # Check for deadlines
         date_str = f"{self.current_date.year}-{self.current_date.month:02d}-{day:02d}"
         has_deadline = date_str in self.deadlines
         deadline_count = len(self.deadlines.get(date_str, []))
         
-        # Create custom day widget
-        day_widget = DayButton(day, is_today, has_deadline, deadline_count)
+        # Container for day + dot
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        container.set_halign(Gtk.Align.CENTER)
+        container.set_valign(Gtk.Align.CENTER)
         
-        # Wrap in a button for click handling
+        # Day number with circle if today
+        day_label = Gtk.Label(label=str(day))
+        day_label.set_halign(Gtk.Align.CENTER)
+        day_label.set_valign(Gtk.Align.CENTER)
+        
+        if is_today:
+            # Translucent circle for today
+            day_label.set_size_request(32, 32)
+            css = Gtk.CssProvider()
+            css.load_from_data(b"""
+                label {
+                    background: alpha(@accent_color, 0.3);
+                    border-radius: 50%;
+                    font-weight: bold;
+                    padding: 6px;
+                }
+            """)
+            day_label.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        container.append(day_label)
+        
+        # Red dot for deadlines (centered)
+        if has_deadline:
+            dot = Gtk.Label(label="●")
+            dot.set_halign(Gtk.Align.CENTER)
+            css = Gtk.CssProvider()
+            css.load_from_data(b"label { color: #ea4335; font-size: 6px; }")
+            dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            container.append(dot)
+        else:
+            spacer = Gtk.Label(label=" ")
+            spacer.set_size_request(-1, 8)
+            container.append(spacer)
+        
+        # Wrap in button
         btn = Gtk.Button()
         btn.add_css_class("flat")
-        btn.set_child(day_widget)
+        btn.set_child(container)
         btn.connect("clicked", self._on_day_clicked, day)
+        
+        if has_deadline:
+            btn.set_tooltip_text(f"{deadline_count} tarea(s)")
         
         return btn
         
     def _on_day_clicked(self, btn, day):
-        """Handle day click"""
         date_str = f"{self.current_date.year}-{self.current_date.month:02d}-{day:02d}"
-        
-        # Update header
         self.selected_date_label.set_text(f"Tareas - {day}/{self.current_date.month}")
         
-        # Clear task list
-        while True:
-            child = self.day_tasks_list.get_first_child()
-            if child:
-                self.day_tasks_list.remove(child)
-            else:
-                break
+        while child := self.day_tasks_list.get_first_child():
+            self.day_tasks_list.remove(child)
                 
-        # Show tasks for this day
         tasks = self.deadlines.get(date_str, [])
         
         if not tasks:
@@ -288,7 +237,6 @@ class CalendarView(Gtk.Box):
             self.day_tasks_list.append(row)
             
     def _on_task_clicked(self, row, task):
-        """Open task detail"""
         from ..widgets.task_detail import TaskDetailDialog
         dialog = TaskDetailDialog(task, parent=self.get_root())
         dialog.connect("task-updated", lambda d: self.refresh())

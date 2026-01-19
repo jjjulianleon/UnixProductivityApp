@@ -51,7 +51,7 @@ class DashboardView(Gtk.Box):
         stats_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         stats_box.set_homogeneous(True)
         
-        self.pending_stat = self._create_stat_card("Pendientes", "0", "checkbox-symbolic")
+        self.pending_stat = self._create_stat_card("Pendientes", "0", "dialog-information-symbolic")
         stats_box.append(self.pending_stat)
         
         self.today_stat = self._create_stat_card("Hoy", "0", "alarm-symbolic")

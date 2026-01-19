@@ -1,6 +1,6 @@
 """
 Weekly Schedule Widget - GTK4
-Clean implementation without duplicates
+Clean implementation with translucent today header
 """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -73,8 +73,9 @@ class AddEventDialog(Adw.Window):
         header = Adw.HeaderBar()
         header.add_css_class("flat")
         
-        Gtk.Button(label="Cancelar").connect("clicked", lambda _: self.close())
-        header.pack_start(Gtk.Button(label="Cancelar"))
+        cancel_btn = Gtk.Button(label="Cancelar")
+        cancel_btn.connect("clicked", lambda _: self.close())
+        header.pack_start(cancel_btn)
         
         save_btn = Gtk.Button(label="Guardar")
         save_btn.add_css_class("suggested-action")
@@ -167,12 +168,13 @@ class WeeklySchedule(Gtk.Box):
         return date - timedelta(days=date.weekday())
         
     def _setup_ui(self):
-        # Nav bar
+        # Nav bar - NO extra + button here, only in nav row
         nav = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         
         prev_btn = Gtk.Button()
         prev_btn.set_icon_name("go-previous-symbolic")
         prev_btn.add_css_class("circular")
+        prev_btn.add_css_class("flat")
         prev_btn.connect("clicked", lambda _: self._change_week(-7))
         nav.append(prev_btn)
         
@@ -196,6 +198,7 @@ class WeeklySchedule(Gtk.Box):
         next_btn = Gtk.Button()
         next_btn.set_icon_name("go-next-symbolic")
         next_btn.add_css_class("circular")
+        next_btn.add_css_class("flat")
         next_btn.connect("clicked", lambda _: self._change_week(7))
         nav.append(next_btn)
         
@@ -253,11 +256,29 @@ class WeeklySchedule(Gtk.Box):
             
             header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             header.set_size_request(100, 40)
+            header.set_halign(Gtk.Align.FILL)
+            header.set_valign(Gtk.Align.FILL)
+            
             if is_today:
-                header.add_css_class("accent-button")
+                # Translucent highlight for today - entire header
+                css = Gtk.CssProvider()
+                css.load_from_data(b"""
+                    box {
+                        background: alpha(@accent_color, 0.25);
+                        border-radius: 8px;
+                        padding: 4px;
+                    }
+                """)
+                header.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
                 
-            header.append(Gtk.Label(label=name))
-            header.append(Gtk.Label(label=str(day_date.day)))
+            name_lbl = Gtk.Label(label=name)
+            name_lbl.add_css_class("caption")
+            header.append(name_lbl)
+            
+            date_lbl = Gtk.Label(label=str(day_date.day))
+            date_lbl.add_css_class("title-4" if is_today else "dim-label")
+            header.append(date_lbl)
+            
             self.grid.attach(header, col, 0, 1, 1)
             
         # Time rows
@@ -282,17 +303,14 @@ class WeeklySchedule(Gtk.Box):
             self._add_day_events(day, day_date)
             
     def _add_day_events(self, day_index, day_date):
-        # Check semester
         if not (SEMESTER_START <= day_date <= SEMESTER_END):
             return
             
         events = FIXED_SCHEDULE.get(day_index, [])
         
         for event in events:
-            # Skip internship if past end date
             if event.get('internship') and day_date > INTERNSHIP_END:
                 continue
-                
             self._add_event_widget(day_index, event)
             
     def _add_event_widget(self, day_index, event):
@@ -301,9 +319,7 @@ class WeeklySchedule(Gtk.Box):
         end_hour = int(event['end'].split(':')[0])
         end_min = int(event['end'].split(':')[1])
         
-        # Calculate row and span
         row = start_hour - 7 + 1
-        
         duration_mins = (end_hour * 60 + end_min) - (start_hour * 60 + start_min)
         span = max(1, round(duration_mins / 60))
         
@@ -312,7 +328,6 @@ class WeeklySchedule(Gtk.Box):
             
         col = day_index + 1
         
-        # Create event box
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.set_valign(Gtk.Align.FILL)
         box.set_halign(Gtk.Align.FILL)

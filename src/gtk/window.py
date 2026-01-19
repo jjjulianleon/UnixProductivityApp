@@ -132,12 +132,13 @@ class MainWindow(Adw.ApplicationWindow):
         ]
         
         self.nav_buttons = {}
+        self.current_nav_key = "dashboard"
         nav_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         nav_box.set_margin_start(8)
         nav_box.set_margin_end(8)
         
         for key, label, icon in nav_items:
-            btn = Gtk.ToggleButton()
+            btn = Gtk.Button()
             btn.add_css_class("sidebar-button")
             btn.add_css_class("flat")
             
@@ -151,9 +152,12 @@ class MainWindow(Adw.ApplicationWindow):
             btn_content.append(btn_label)
             btn.set_child(btn_content)
             
-            btn.connect("toggled", self._on_nav_button_toggled, key)
+            btn.connect("clicked", self._on_nav_button_clicked, key)
             self.nav_buttons[key] = btn
             nav_box.append(btn)
+            
+        # Set initial active state
+        self.nav_buttons["dashboard"].add_css_class("suggested-action")
             
         sidebar.append(nav_box)
         
@@ -223,33 +227,31 @@ class MainWindow(Adw.ApplicationWindow):
         
         return header
         
-    def _on_nav_button_toggled(self, button, key):
-        """Handle navigation button toggle"""
-        if button.get_active():
-            # Deselect other buttons
-            for k, btn in self.nav_buttons.items():
-                if k != key:
-                    btn.set_active(False)
-            
-            # Switch view
-            self.stack.set_visible_child_name(key)
-            
-            # Update header title
-            titles = {
-                "dashboard": "Dashboard",
-                "tasks": "Tareas",
-                "kanban": "Kanban Board",
-                "calendar": "Calendario", 
-                "schedule": "Horario Semanal",
-                "pomodoro": "Pomodoro Timer",
-                "notes": "Rough Notes",
-                "stats": "Estadísticas"
-            }
-            self.header_title.set_text(titles.get(key, key))
-        else:
-            # Prevent deselecting current button
-            if self.stack.get_visible_child_name() == key:
-                button.set_active(True)
+    def _on_nav_button_clicked(self, button, key):
+        """Handle navigation button click - works on first click"""
+        # Remove active state from previous button
+        if self.current_nav_key in self.nav_buttons:
+            self.nav_buttons[self.current_nav_key].remove_css_class("suggested-action")
+        
+        # Add active state to clicked button
+        button.add_css_class("suggested-action")
+        self.current_nav_key = key
+        
+        # Switch view
+        self.stack.set_visible_child_name(key)
+        
+        # Update header title
+        titles = {
+            "dashboard": "Dashboard",
+            "tasks": "Tareas",
+            "kanban": "Kanban Board",
+            "calendar": "Calendario", 
+            "schedule": "Horario Semanal",
+            "pomodoro": "Pomodoro Timer",
+            "notes": "Rough Notes",
+            "stats": "Estadísticas"
+        }
+        self.header_title.set_text(titles.get(key, key))
                 
     def _on_settings_clicked(self, button):
         """Open settings dialog"""

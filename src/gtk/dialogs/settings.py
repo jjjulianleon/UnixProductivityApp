@@ -1,12 +1,12 @@
 """
 Settings Dialog - GTK4
-Application preferences
+Application preferences with save functionality
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
-from gi.repository import Gtk, Adw
+from gi.repository import Gtk, Adw, Gdk
 import sys
 from pathlib import Path
 
@@ -15,10 +15,11 @@ from src.core.task_manager import task_manager
 
 
 class SettingsDialog(Adw.PreferencesWindow):
-    """Settings dialog"""
+    """Settings dialog with save functionality"""
     
     def __init__(self, parent=None):
         super().__init__()
+        self.parent_window = parent
         self.set_title("Configuración")
         self.set_default_size(600, 500)
         self.set_modal(True)
@@ -29,7 +30,6 @@ class SettingsDialog(Adw.PreferencesWindow):
         self._load_settings()
         
     def _setup_ui(self):
-        """Setup settings UI"""
         # Appearance page
         appearance_page = Adw.PreferencesPage()
         appearance_page.set_title("Apariencia")
@@ -44,13 +44,19 @@ class SettingsDialog(Adw.PreferencesWindow):
         self.opacity_row.set_title("Opacidad")
         self.opacity_row.set_subtitle("88%")
         
-        opacity_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 50, 100, 5)
-        opacity_scale.set_value(88)
-        opacity_scale.set_size_request(200, -1)
-        opacity_scale.set_valign(Gtk.Align.CENTER)
-        opacity_scale.connect("value-changed", self._on_opacity_changed)
-        self.opacity_row.add_suffix(opacity_scale)
-        self.opacity_scale = opacity_scale
+        self.opacity_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 50, 100, 5)
+        self.opacity_scale.set_value(88)
+        self.opacity_scale.set_size_request(150, -1)
+        self.opacity_scale.set_valign(Gtk.Align.CENTER)
+        self.opacity_scale.connect("value-changed", self._on_opacity_changed)
+        self.opacity_row.add_suffix(self.opacity_scale)
+        
+        # Save opacity button
+        save_opacity_btn = Gtk.Button(label="Aplicar")
+        save_opacity_btn.add_css_class("suggested-action")
+        save_opacity_btn.set_valign(Gtk.Align.CENTER)
+        save_opacity_btn.connect("clicked", self._on_save_opacity)
+        self.opacity_row.add_suffix(save_opacity_btn)
         
         translucency_group.add(self.opacity_row)
         appearance_page.add(translucency_group)
@@ -79,6 +85,17 @@ class SettingsDialog(Adw.PreferencesWindow):
         self.long_break_row.set_title("Descanso largo (min)")
         self.long_break_row.set_value(15)
         timer_group.add(self.long_break_row)
+        
+        # Save pomodoro button
+        save_pomodoro_row = Adw.ActionRow()
+        save_pomodoro_row.set_title("")
+        
+        save_pomodoro_btn = Gtk.Button(label="Guardar configuración")
+        save_pomodoro_btn.add_css_class("suggested-action")
+        save_pomodoro_btn.set_valign(Gtk.Align.CENTER)
+        save_pomodoro_btn.connect("clicked", self._on_save_pomodoro)
+        save_pomodoro_row.add_suffix(save_pomodoro_btn)
+        timer_group.add(save_pomodoro_row)
         
         pomodoro_page.add(timer_group)
         self.add(pomodoro_page)
@@ -139,29 +156,52 @@ class SettingsDialog(Adw.PreferencesWindow):
         self.add(about_page)
         
     def _on_opacity_changed(self, scale):
-        """Handle opacity change"""
         value = int(scale.get_value())
         self.opacity_row.set_subtitle(f"{value}%")
-        # TODO: Apply opacity to main window
         
-    def _load_settings(self):
-        """Load settings from database"""
+    def _on_save_opacity(self, btn):
+        """Apply and save opacity"""
+        value = int(self.opacity_scale.get_value())
+        
+        # Save to database
         try:
-            settings = task_manager.get_all_settings()
+            task_manager.set_setting('window_opacity', value)
+        except:
+            pass
             
-            # Pomodoro
-            self.work_row.set_value(settings.get('pomodoro_work', 25))
-            self.break_row.set_value(settings.get('pomodoro_break', 5))
-            self.long_break_row.set_value(settings.get('pomodoro_long_break', 15))
+        # Apply to main window CSS
+        if self.parent_window:
+            css = Gtk.CssProvider()
+            opacity = value / 100
+            css.load_from_data(f"window.main-window {{ background-color: alpha(@window_bg_color, {opacity}); }}".encode())
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(),
+                css,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
             
-        except Exception as e:
-            print(f"Error loading settings: {e}")
-            
-    def _save_settings(self):
-        """Save settings to database"""
+        # Show confirmation
+        self.opacity_row.set_subtitle(f"{value}% ✓")
+        
+    def _on_save_pomodoro(self, btn):
+        """Save pomodoro settings"""
         try:
             task_manager.set_setting('pomodoro_work', int(self.work_row.get_value()))
             task_manager.set_setting('pomodoro_break', int(self.break_row.get_value()))
             task_manager.set_setting('pomodoro_long_break', int(self.long_break_row.get_value()))
+            btn.set_label("Guardado ✓")
         except Exception as e:
-            print(f"Error saving settings: {e}")
+            print(f"Error saving: {e}")
+        
+    def _load_settings(self):
+        try:
+            settings = task_manager.get_all_settings()
+            self.work_row.set_value(settings.get('pomodoro_work', 25))
+            self.break_row.set_value(settings.get('pomodoro_break', 5))
+            self.long_break_row.set_value(settings.get('pomodoro_long_break', 15))
+            
+            opacity = settings.get('window_opacity', 88)
+            self.opacity_scale.set_value(opacity)
+            self.opacity_row.set_subtitle(f"{opacity}%")
+        except Exception as e:
+            print(f"Error loading settings: {e}")
