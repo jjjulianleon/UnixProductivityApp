@@ -38,15 +38,36 @@ class TaskManager:
         self.obsidian = ObsidianSync()
         self.ics_sync = UnifiedCalendarSync() if HAS_ICS else None
         self.icloud_sync = ICloudSync() if HAS_ICS else None
-        self._initial_sync()
-        self.sync_external_calendars()
+        
+        # Run initial sync in background to avoid blocking startup
+        import threading
+        threading.Thread(target=self._initial_sync_and_ics, daemon=True).start()
         
         # Auto-refresh timer (every 15 minutes)
         if HAS_ICS:
-            from PyQt6.QtCore import QTimer
-            self.refresh_timer = QTimer()
-            self.refresh_timer.timeout.connect(self.sync_external_calendars)
-            self.refresh_timer.start(15 * 60 * 1000) # 15 minutes
+            self._start_refresh_timer()
+            
+    def _initial_sync_and_ics(self):
+        """Run initial syncs in background"""
+        try:
+            self._initial_sync()
+            self.sync_external_calendars()
+        except Exception as e:
+            print(f"Background sync error: {e}")
+            
+    def _start_refresh_timer(self):
+        """Start periodic sync timer using threading"""
+        import threading
+        def run_timer():
+            self.sync_external_calendars()
+            # Reschedule
+            self.refresh_timer = threading.Timer(15 * 60, run_timer)
+            self.refresh_timer.daemon = True
+            self.refresh_timer.start()
+            
+        self.refresh_timer = threading.Timer(15 * 60, run_timer)
+        self.refresh_timer.daemon = True
+        self.refresh_timer.start()
     
     def _initial_sync(self):
         """Sync tasks from Obsidian to database on startup"""
