@@ -118,10 +118,10 @@ class TaskDetailDialog(Adw.Window):
         self.deadline_row = Adw.ActionRow()
         self.deadline_row.set_title("Fecha límite")
         self.selected_deadline = self.task.get('deadline')
-        self.deadline_row.set_subtitle(self.selected_deadline or "Sin fecha")
+        self.deadline_row.set_subtitle(self._format_deadline(self.selected_deadline))
         
         date_btn = Gtk.Button()
-        date_btn.set_icon_name("month-symbolic")
+        date_btn.set_icon_name("x-office-calendar-symbolic")
         date_btn.set_valign(Gtk.Align.CENTER)
         date_btn.connect("clicked", self._show_date_picker)
         self.deadline_row.add_suffix(date_btn)
@@ -165,6 +165,20 @@ class TaskDetailDialog(Adw.Window):
         scroll.set_child(content)
         main_box.append(scroll)
         
+    def _format_deadline(self, deadline: str) -> str:
+        """Format deadline for display with date and time"""
+        if not deadline:
+            return "Sin fecha"
+        try:
+            if 'T' in deadline:
+                dt = datetime.fromisoformat(deadline)
+                return dt.strftime("%d/%m/%Y %I:%M %p").lower()
+            else:
+                dt = datetime.strptime(deadline, "%Y-%m-%d")
+                return dt.strftime("%d/%m/%Y")
+        except:
+            return deadline
+            
     def _show_date_picker(self, btn):
         """Show date picker"""
         popover = Gtk.Popover()
@@ -173,7 +187,9 @@ class TaskDetailDialog(Adw.Window):
         calendar = Gtk.Calendar()
         if self.selected_deadline:
             try:
-                date = datetime.strptime(self.selected_deadline, "%Y-%m-%d")
+                # Handle ISO format with time
+                date_str = self.selected_deadline[:10] if 'T' in self.selected_deadline else self.selected_deadline
+                date = datetime.strptime(date_str, "%Y-%m-%d")
                 calendar.select_day(GLib.DateTime.new_local(date.year, date.month, date.day, 0, 0, 0))
             except:
                 pass
@@ -186,14 +202,14 @@ class TaskDetailDialog(Adw.Window):
         """Handle date selection"""
         date = calendar.get_date()
         self.selected_deadline = f"{date.get_year()}-{date.get_month():02d}-{date.get_day_of_month():02d}"
-        self.deadline_row.set_subtitle(self.selected_deadline)
+        self.deadline_row.set_subtitle(self._format_deadline(self.selected_deadline))
         popover.popdown()
         
     def _clear_deadline(self, btn):
         """Clear deadline"""
         self.selected_deadline = None
-        self.deadline_row.set_subtitle("Sin fecha")
-        
+        self.deadline_row.set_subtitle(self._format_deadline(self.selected_deadline))
+            
     def _on_save(self, btn):
         """Save task changes"""
         statuses = ["pendiente", "en progreso", "completado"]

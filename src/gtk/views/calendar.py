@@ -124,7 +124,8 @@ class CalendarView(Gtk.Box):
             tasks = task_manager.get_tasks_with_deadlines()
             for task in tasks:
                 if task.get('deadline') and task.get('status') != 'completado':
-                    date_str = task['deadline']
+                    # Extract date-only for grouping (YYYY-MM-DD)
+                    date_str = task['deadline'][:10]
                     if date_str not in self.deadlines:
                         self.deadlines[date_str] = []
                     self.deadlines[date_str].append(task)

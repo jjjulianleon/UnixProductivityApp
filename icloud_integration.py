@@ -18,6 +18,7 @@ except ImportError:
 
 CONFIG_DIR = Path.home() / ".config" / "calendar_widget"
 ICLOUD_CONFIG_FILE = CONFIG_DIR / "icloud_config.json"
+SYNC_CACHE_FILE = CONFIG_DIR / "icloud_sync_cache.json"
 
 
 class ICloudSync:
@@ -54,6 +55,26 @@ class ICloudSync:
         
         with open(ICLOUD_CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=2)
+            
+    def _load_sync_cache(self) -> set:
+        """Load set of already-synced event identifiers"""
+        try:
+            with open(SYNC_CACHE_FILE, 'r') as f:
+                return set(json.load(f))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return set()
+            
+    def _save_sync_cache(self, cache: set):
+        """Save sync cache to disk"""
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(SYNC_CACHE_FILE, 'w') as f:
+            json.dump(list(cache), f)
+            
+    def _make_event_key(self, title: str, due_date: str) -> str:
+        """Create unique key for event deduplication"""
+        # Use title + date (not time) for key
+        date_only = due_date[:10] if due_date else ""
+        return f"{title.lower().strip()}|{date_only}"
             
     def connect(self) -> bool:
         """Connect to iCloud CalDAV server"""
@@ -266,6 +287,9 @@ class ICloudSync:
         created = 0
         skipped = 0
         
+        # Load local sync cache to prevent duplicates across restarts
+        sync_cache = self._load_sync_cache()
+        
         for dl in deadlines:
             try:
                 base_title = dl.get('title', 'Tarea')
@@ -279,16 +303,19 @@ class ICloudSync:
                 if not due_date_str:
                     skipped += 1
                     continue
+                
+                # Check local cache FIRST (fast, no network)
+                event_key = self._make_event_key(base_title, due_date_str)
+                if event_key in sync_cache:
+                    skipped += 1
+                    continue
                     
                 due_dt = datetime.fromisoformat(due_date_str)
                 
-                # Check for duplicate
+                # Then check iCloud (slower, for safety)
                 if self.event_exists(full_title, due_dt):
-                    skipped += 1
-                    continue
-                
-                # Double check with base title
-                if self.event_exists(base_title, due_dt):
+                    # Add to cache since it exists
+                    sync_cache.add(event_key)
                     skipped += 1
                     continue
                 
@@ -297,12 +324,17 @@ class ICloudSync:
                 
                 if self.add_event(full_title, due_dt, end_dt, location):
                     created += 1
+                    # Track in local cache
+                    sync_cache.add(event_key)
                 else:
                     skipped += 1
                     
             except Exception as e:
                 print(f"Error syncing deadline: {e}")
                 skipped += 1
+        
+        # Save updated cache
+        self._save_sync_cache(sync_cache)
                 
         return {'created': created, 'skipped': skipped}
     
