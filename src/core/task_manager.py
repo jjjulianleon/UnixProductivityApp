@@ -115,8 +115,8 @@ class TaskManager:
                             break
                             
                 if not exists:
-                    # Extract date YYYY-MM-DD
-                    deadline_date = dl['due_date'].split('T')[0]
+                    # Save full ISO date YYYY-MM-DDTHH:MM:SS
+                    deadline_date = dl['due_date']
                     
                     # Create tags list
                     tags = ['Brightspace']
@@ -337,6 +337,20 @@ class TaskManager:
     def get_tasks_with_deadlines(self) -> List[Dict]:
         """Get all tasks with deadlines"""
         return db.get_tasks_with_deadlines()
+        
+    def get_deadlines_by_date(self) -> Dict[str, List[Dict]]:
+        """Get tasks with deadlines grouped by date YYYY-MM-DD"""
+        tasks = db.get_tasks_with_deadlines()
+        grouped = {}
+        for t in tasks:
+            if not t.get('deadline'):
+                continue
+            # Extract YYYY-MM-DD for grouping key
+            date_key = t['deadline'][:10]
+            if date_key not in grouped:
+                grouped[date_key] = []
+            grouped[date_key].append(t)
+        return grouped
     
     def get_today_tasks(self) -> List[Dict]:
         """Get today's tasks"""
@@ -350,7 +364,8 @@ class TaskManager:
         """Get overdue tasks"""
         today = datetime.now().strftime("%Y-%m-%d")
         all_deadline_tasks = db.get_tasks_with_deadlines()
-        return [t for t in all_deadline_tasks if t['deadline'] < today]
+        # Handle ISO format by taking first 10 chars
+        return [t for t in all_deadline_tasks if t['deadline'][:10] < today]
     
     def get_tasks_by_category(self, category: str) -> List[Dict]:
         """Get all tasks for a specific category"""
@@ -380,7 +395,8 @@ class TaskManager:
         future_str = future.strftime("%Y-%m-%d")
         
         all_deadline_tasks = db.get_tasks_with_deadlines()
-        return [t for t in all_deadline_tasks if today_str <= t['deadline'] <= future_str]
+        # Handle ISO format
+        return [t for t in all_deadline_tasks if today_str <= t['deadline'][:10] <= future_str]
     
     def search_tasks(self, query: str) -> List[Dict]:
         """Search tasks by title or description"""
