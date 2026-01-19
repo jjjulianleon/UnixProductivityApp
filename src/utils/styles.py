@@ -30,18 +30,18 @@ COLORS = {
 
 # Base stylesheet components
 GLASSMORPHISM_BG = """
-    background-color: rgba(30, 30, 35, 230);
+    background-color: rgba(25, 25, 30, 200);
 """
 
 GLASSMORPHISM_WIDGET = """
-    background-color: rgba(40, 40, 45, 200);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(35, 35, 40, 180);
+    border: none;
     border-radius: 12px;
 """
 
 GLASSMORPHISM_CARD = """
-    background-color: rgba(50, 50, 55, 180);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(45, 45, 50, 150);
+    border: none;
     border-radius: 8px;
 """
 
@@ -263,21 +263,22 @@ def get_tab_style():
             background: transparent;
         }}
         QTabBar::tab {{
-            background-color: rgba(255, 255, 255, 0.05);
-            color: rgb({COLORS['text_secondary']});
+            background-color: transparent;
+            color: rgb({COLORS['text_muted']});
             border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            margin-right: 4px;
+            border-radius: 8px;
+            padding: 6px 14px;
+            margin-right: 2px;
             font-family: "{FONT_FAMILY}";
             font-size: 10px;
         }}
         QTabBar::tab:selected {{
-            background-color: rgba({COLORS['primary']}, 0.2);
+            background-color: rgba({COLORS['primary']}, 0.25);
             color: rgb({COLORS['primary']});
         }}
         QTabBar::tab:hover:!selected {{
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 255, 255, 0.08);
+            color: rgb({COLORS['text_secondary']});
         }}
     """
 
