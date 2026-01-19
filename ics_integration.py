@@ -211,7 +211,7 @@ class ICSParser:
                 'title': summary.strip(),
                 'start': start_dt.isoformat() if start_dt else None,
                 'end': end_dt.isoformat() if end_dt else None,
-                'deadline': local_dt.isoformat() if isinstance(target_dt, datetime) else target_dt.isoformat() if target_dt else None,
+                'deadline': local_dt.replace(tzinfo=None).isoformat() if isinstance(target_dt, datetime) else target_dt.strftime('%Y-%m-%dT%H:%M:%S') if target_dt else None,
                 'description': description[:500],  # Limit description length
                 'location': location,
                 'url': str(component.get('URL', '') or ''),
