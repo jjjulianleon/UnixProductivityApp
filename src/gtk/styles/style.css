@@ -17,6 +17,16 @@ window.widget-mode {
 @define-color warning_color #fbbc05;
 @define-color danger_color #ea4335;
 
+/* ============== BUTTONS ============== */
+button.suggested-action {
+  background-color: alpha(@accent_color, 0.3);
+  color: @accent_color;
+}
+
+button.suggested-action:hover {
+  background-color: alpha(@accent_color, 0.45);
+}
+
 /* ============== CARDS ============== */
 .glass-card {
   background-color: alpha(@card_bg_color, 0.6);
