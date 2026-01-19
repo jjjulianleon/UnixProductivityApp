@@ -1,5 +1,6 @@
 """
-Kanban Board Widget - GTK4 with Drag and Drop
+Kanban Board Widget - GTK4 with proper Drag and Drop
+Click opens details, long press + drag moves cards
 """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -16,15 +17,13 @@ from src.core.task_manager import task_manager
 class DraggableTaskCard(Gtk.Box):
     """A draggable task card for the Kanban board"""
     
-    __gsignals__ = {
-        'task-dropped': (GObject.SignalFlags.RUN_FIRST, None, (str, str)),
-    }
-    
-    def __init__(self, task: dict, current_status: str):
+    def __init__(self, task: dict, current_status: str, board):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.task = task
         self.current_status = current_status
         self.task_id = task.get('id')
+        self.board = board
+        self._drag_started = False
         
         self.add_css_class("task-card")
         self.set_margin_start(4)
@@ -36,16 +35,17 @@ class DraggableTaskCard(Gtk.Box):
         priority = task.get('priority', 'media')
         self.add_css_class(f"priority-{priority}")
         
-        # Make draggable
+        # Make draggable - this handles long press automatically
         drag_source = Gtk.DragSource()
         drag_source.set_actions(Gdk.DragAction.MOVE)
         drag_source.connect("prepare", self._on_drag_prepare)
         drag_source.connect("drag-begin", self._on_drag_begin)
+        drag_source.connect("drag-end", self._on_drag_end)
         self.add_controller(drag_source)
         
-        # Click to view details
+        # Click gesture - only fires if drag didn't start
         click = Gtk.GestureClick()
-        click.connect("pressed", self._on_clicked)
+        click.connect("released", self._on_click_released)
         self.add_controller(click)
         
         self._setup_ui()
@@ -79,20 +79,28 @@ class DraggableTaskCard(Gtk.Box):
         
     def _on_drag_prepare(self, source, x, y):
         """Prepare drag data"""
+        self._drag_started = True
         content = Gdk.ContentProvider.new_for_value(f"{self.task_id}:{self.current_status}")
         return content
         
     def _on_drag_begin(self, source, drag):
         """Visual feedback when drag starts"""
-        # Create a semi-transparent snapshot for drag icon
-        snapshot = Gtk.Snapshot()
-        self.snapshot(snapshot)
-        paintable = snapshot.to_paintable(None)
-        source.set_icon(paintable, 0, 0)
         self.set_opacity(0.5)
         
-    def _on_clicked(self, gesture, n_press, x, y):
-        """Open task detail dialog"""
+    def _on_drag_end(self, source, drag, delete_data):
+        """Reset visual after drag"""
+        self.set_opacity(1.0)
+        # Reset flag after a short delay
+        GLib.timeout_add(100, self._reset_drag_flag)
+        
+    def _reset_drag_flag(self):
+        self._drag_started = False
+        return False
+        
+    def _on_click_released(self, gesture, n_press, x, y):
+        """Open task detail only if drag didn't happen"""
+        if self._drag_started:
+            return
         if n_press == 1:
             from .task_detail import TaskDetailDialog
             dialog = TaskDetailDialog(self.task, parent=self.get_root())
@@ -101,12 +109,7 @@ class DraggableTaskCard(Gtk.Box):
             
     def _on_task_updated(self, dialog):
         """Refresh when task is updated"""
-        # Signal parent to refresh
-        parent = self.get_parent()
-        while parent and not isinstance(parent, KanbanBoard):
-            parent = parent.get_parent()
-        if parent:
-            parent.refresh()
+        self.board.refresh()
 
 
 class KanbanColumn(Gtk.Box):
@@ -155,10 +158,10 @@ class KanbanColumn(Gtk.Box):
         
         self.append(header)
         
-        # Task list
+        # Task list with hidden scrollbar
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.EXTERNAL)  # Hidden scrollbar
         
         self.task_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         scroll.set_child(self.task_list)
@@ -188,7 +191,7 @@ class KanbanColumn(Gtk.Box):
         
     def add_task(self, task: dict):
         """Add a task card to this column"""
-        card = DraggableTaskCard(task, self.status)
+        card = DraggableTaskCard(task, self.status, self.board)
         self.task_list.append(card)
         
     def clear_tasks(self):

@@ -1,12 +1,12 @@
 """
 Weekly Schedule Widget - GTK4
-Teams-style weekly schedule view with semester date support
+Teams-style weekly schedule with correct times and event handling
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
-from gi.repository import Gtk, Adw, GLib, Gdk
+from gi.repository import Gtk, Adw, GLib, Gdk, GObject
 from datetime import datetime, timedelta
 import sys
 from pathlib import Path
@@ -20,7 +20,8 @@ SEMESTER_START = datetime(2026, 1, 12)  # 12 de enero
 SEMESTER_END = datetime(2026, 5, 16)    # 16 de mayo
 INTERNSHIP_END = datetime(2026, 2, 14)  # Pasantías hasta 14 de febrero
 
-# Fixed schedule (Lunes=0, Domingo=6)
+# Fixed schedule - CORRECT TIMES
+# Format: {"start": "HH:MM", "end": "HH:MM", "title": "...", "color": "R, G, B"}
 FIXED_SCHEDULE = {
     0: [  # Lunes
         {"start": "13:00", "end": "14:20", "title": "Data Mining", "color": "66, 133, 244"},
@@ -42,7 +43,7 @@ FIXED_SCHEDULE = {
         {"start": "14:30", "end": "15:50", "title": "Mercados Int.", "color": "234, 67, 53"},
     ],
     4: [  # Viernes
-        {"start": "08:30", "end": "13:30", "title": "PASANTÍAS", "color": "255, 87, 34", "ends": INTERNSHIP_END},
+        {"start": "08:30", "end": "13:30", "title": "PASANTÍAS", "color": "255, 87, 34", "internship": True},
         {"start": "14:00", "end": "18:00", "title": "PASEC", "color": "156, 39, 176"},
     ],
     5: [],  # Sábado
@@ -51,12 +52,16 @@ FIXED_SCHEDULE = {
 
 
 class AddEventDialog(Adw.Window):
-    """Dialog to add a new event"""
+    """Dialog to add a new schedule event"""
+    
+    __gsignals__ = {
+        'event-added': (GObject.SignalFlags.RUN_FIRST, None, ()),
+    }
     
     def __init__(self, parent=None, default_day=0, default_hour=9):
         super().__init__()
         self.set_title("Nuevo Evento")
-        self.set_default_size(400, 400)
+        self.set_default_size(400, 450)
         self.set_modal(True)
         if parent:
             self.set_transient_for(parent)
@@ -86,7 +91,7 @@ class AddEventDialog(Adw.Window):
         main_box.append(header)
         
         # Content
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         content.set_margin_top(20)
         content.set_margin_bottom(20)
         content.set_margin_start(20)
@@ -98,6 +103,13 @@ class AddEventDialog(Adw.Window):
         self.title_entry.set_title("Nombre del evento")
         title_group.add(self.title_entry)
         content.append(title_group)
+        
+        # Description (optional)
+        desc_group = Adw.PreferencesGroup()
+        self.desc_entry = Adw.EntryRow()
+        self.desc_entry.set_title("Descripción (opcional)")
+        desc_group.add(self.desc_entry)
+        content.append(desc_group)
         
         # Day
         day_group = Adw.PreferencesGroup()
@@ -114,27 +126,70 @@ class AddEventDialog(Adw.Window):
         time_group.set_title("Horario")
         
         self.start_row = Adw.EntryRow()
-        self.start_row.set_title("Inicio")
+        self.start_row.set_title("Inicio (HH:MM)")
         self.start_row.set_text(f"{self.default_hour:02d}:00")
         time_group.add(self.start_row)
         
         self.end_row = Adw.EntryRow()
-        self.end_row.set_title("Fin")
-        self.end_row.set_text(f"{self.default_hour + 1:02d}:30")
+        self.end_row.set_title("Fin (HH:MM)")
+        self.end_row.set_text(f"{self.default_hour + 1:02d}:00")
         time_group.add(self.end_row)
         
         content.append(time_group)
         
-        # Recurring
+        # Recurring options
         recur_group = Adw.PreferencesGroup()
+        recur_group.set_title("Repetir")
+        
         self.recurring_switch = Adw.SwitchRow()
         self.recurring_switch.set_title("Evento recurrente")
         self.recurring_switch.set_subtitle("Se repite cada semana")
         recur_group.add(self.recurring_switch)
+        
         content.append(recur_group)
+        
+        # Color picker
+        color_group = Adw.PreferencesGroup()
+        color_group.set_title("Color")
+        
+        color_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        color_box.set_margin_top(8)
+        
+        colors = [
+            ("66, 133, 244", "#4285f4"),   # Blue
+            ("52, 168, 83", "#34a853"),     # Green
+            ("251, 188, 5", "#fbbc05"),     # Yellow
+            ("234, 67, 53", "#ea4335"),     # Red
+            ("156, 39, 176", "#9c27b0"),    # Purple
+        ]
+        
+        self.selected_color = colors[0][0]
+        self.color_buttons = []
+        
+        for rgb, hex_color in colors:
+            btn = Gtk.ToggleButton()
+            btn.set_size_request(32, 32)
+            css = Gtk.CssProvider()
+            css.load_from_data(f"button {{ background: {hex_color}; border-radius: 50%; }}".encode())
+            btn.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            btn.connect("toggled", self._on_color_selected, rgb)
+            color_box.append(btn)
+            self.color_buttons.append(btn)
+            
+        self.color_buttons[0].set_active(True)
+        color_group.add(color_box)
+        content.append(color_group)
         
         main_box.append(content)
         
+    def _on_color_selected(self, btn, color):
+        """Handle color selection"""
+        if btn.get_active():
+            self.selected_color = color
+            for b in self.color_buttons:
+                if b != btn:
+                    b.set_active(False)
+                    
     def _on_save(self, btn):
         """Save the event"""
         title = self.title_entry.get_text()
@@ -142,25 +197,29 @@ class AddEventDialog(Adw.Window):
             self.title_entry.add_css_class("error")
             return
             
-        # Save event (would save to database)
+        event = {
+            'title': title,
+            'description': self.desc_entry.get_text(),
+            'day': self.day_row.get_selected(),
+            'start_time': self.start_row.get_text(),
+            'end_time': self.end_row.get_text(),
+            'recurring': self.recurring_switch.get_active(),
+            'color': self.selected_color
+        }
+        
         try:
-            event = {
-                'title': title,
-                'day': self.day_row.get_selected(),
-                'start_time': self.start_row.get_text(),
-                'end_time': self.end_row.get_text(),
-                'recurring': self.recurring_switch.get_active(),
-                'color': '66, 133, 244'
-            }
             task_manager.add_schedule_event(event)
-            self.close()
         except Exception as e:
             print(f"Error saving event: {e}")
-            self.close()
+            
+        self.emit("event-added")
+        self.close()
 
 
 class WeeklySchedule(Gtk.Box):
-    """Weekly schedule grid"""
+    """Weekly schedule grid with proper event layout"""
+    
+    HOUR_HEIGHT = 50  # Pixels per hour
     
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -170,6 +229,7 @@ class WeeklySchedule(Gtk.Box):
         self.set_margin_end(24)
         
         self.current_week_start = self._get_week_start(datetime.now())
+        self.custom_events = []
         self._setup_ui()
         self.refresh()
         
@@ -199,7 +259,7 @@ class WeeklySchedule(Gtk.Box):
         add_btn.add_css_class("suggested-action")
         add_btn.add_css_class("circular")
         add_btn.set_tooltip_text("Agregar evento")
-        add_btn.connect("clicked", self._on_add_event)
+        add_btn.connect("clicked", lambda _: self._show_add_dialog(0, 9))
         nav.append(add_btn)
         
         self.week_label = Gtk.Label()
@@ -215,45 +275,39 @@ class WeeklySchedule(Gtk.Box):
         
         self.append(nav)
         
-        # Schedule grid
+        # Schedule container
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         
-        self.grid = Gtk.Grid()
-        self.grid.set_column_homogeneous(True)
-        self.grid.set_row_spacing(2)
-        self.grid.set_column_spacing(2)
-        scroll.set_child(self.grid)
+        # Use overlay for event positioning
+        self.schedule_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        scroll.set_child(self.schedule_box)
         
         self.append(scroll)
         
-    def _on_add_event(self, btn):
+    def _show_add_dialog(self, day, hour):
         """Show add event dialog"""
-        dialog = AddEventDialog(parent=self.get_root())
+        dialog = AddEventDialog(parent=self.get_root(), default_day=day, default_hour=hour)
+        dialog.connect("event-added", lambda d: self.refresh())
         dialog.present()
         
     def _prev_week(self, btn):
-        """Go to previous week"""
         self.current_week_start -= timedelta(days=7)
         self.refresh()
         
     def _next_week(self, btn):
-        """Go to next week"""
         self.current_week_start += timedelta(days=7)
         self.refresh()
         
     def _go_today(self, btn):
-        """Go to current week"""
         self.current_week_start = self._get_week_start(datetime.now())
         self.refresh()
         
     def _is_in_semester(self, date: datetime) -> bool:
-        """Check if date is within semester"""
         return SEMESTER_START <= date <= SEMESTER_END
         
     def _is_internship_active(self, date: datetime) -> bool:
-        """Check if internship is still active"""
         return date <= INTERNSHIP_END
         
     def refresh(self):
@@ -267,136 +321,214 @@ class WeeklySchedule(Gtk.Box):
             f"{week_end.day} {months[week_end.month-1]} {week_end.year}"
         )
         
-        # Clear grid
+        # Clear schedule
         while True:
-            child = self.grid.get_first_child()
+            child = self.schedule_box.get_first_child()
             if child:
-                self.grid.remove(child)
+                self.schedule_box.remove(child)
             else:
                 break
                 
-        # Header row with days
-        days = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-        today = datetime.now().date()
+        # Time column
+        time_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        time_col.set_size_request(60, -1)
         
-        for col, day in enumerate(days):
-            if col == 0:
-                continue  # Skip time column header
-            
-            day_date = self.current_week_start + timedelta(days=col-1)
-            is_today = day_date.date() == today
-            
-            header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            header.add_css_class("schedule-header")
-            if is_today:
-                header.add_css_class("accent-button")
-                
-            day_label = Gtk.Label(label=day)
-            day_label.add_css_class("caption")
-            header.append(day_label)
-            
-            date_label = Gtk.Label(label=str(day_date.day))
-            date_label.add_css_class("title-4" if is_today else "dim-label")
-            header.append(date_label)
-            
-            self.grid.attach(header, col, 0, 1, 1)
-            
-        # Time rows
-        hours = list(range(7, 20))  # 7 AM to 7 PM
+        # Empty header
+        header_spacer = Gtk.Label(label="")
+        header_spacer.set_size_request(60, 40)
+        time_col.append(header_spacer)
         
-        for row, hour in enumerate(hours, start=1):
-            # Time label
+        # Time labels
+        for hour in range(7, 20):
             time_label = Gtk.Label(label=f"{hour:02d}:00")
             time_label.add_css_class("dim-label")
             time_label.add_css_class("caption")
-            time_label.set_size_request(50, 40)
-            self.grid.attach(time_label, 0, row, 1, 1)
+            time_label.set_size_request(60, self.HOUR_HEIGHT)
+            time_label.set_valign(Gtk.Align.START)
+            time_col.append(time_label)
             
-            # Day cells
-            for col in range(1, 8):
-                cell = Gtk.Box()
-                cell.set_size_request(-1, 40)
-                # Light border effect
-                css = Gtk.CssProvider()
-                css.load_from_data(b"box { border: 1px solid alpha(white, 0.05); }")
-                cell.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-                self.grid.attach(cell, col, row, 1, 1)
-                
-        # Add events
-        self._add_events()
+        self.schedule_box.append(time_col)
         
-    def _add_events(self):
-        """Add events to the grid"""
+        # Day columns
+        today = datetime.now().date()
+        day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+        
         for day in range(7):
             day_date = self.current_week_start + timedelta(days=day)
+            is_today = day_date.date() == today
             
-            # Skip if outside semester
-            if not self._is_in_semester(day_date):
+            day_col = self._create_day_column(day, day_names[day], day_date, is_today)
+            self.schedule_box.append(day_col)
+            
+    def _create_day_column(self, day_index: int, day_name: str, day_date: datetime, is_today: bool) -> Gtk.Box:
+        """Create a day column with events"""
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        col.set_hexpand(True)
+        col.set_size_request(100, -1)
+        
+        # Header
+        header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        header.set_size_request(-1, 40)
+        if is_today:
+            header.add_css_class("accent-button")
+        
+        name_label = Gtk.Label(label=day_name)
+        name_label.add_css_class("caption")
+        header.append(name_label)
+        
+        date_label = Gtk.Label(label=str(day_date.day))
+        date_label.add_css_class("title-4" if is_today else "dim-label")
+        header.append(date_label)
+        
+        col.append(header)
+        
+        # Time grid with events overlay
+        overlay = Gtk.Overlay()
+        overlay.set_vexpand(True)
+        
+        # Background grid (clickable cells)
+        grid_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        for hour in range(7, 20):
+            cell = Gtk.Button()
+            cell.add_css_class("flat")
+            cell.set_size_request(-1, self.HOUR_HEIGHT)
+            css = Gtk.CssProvider()
+            css.load_from_data(b"button { border-bottom: 1px solid alpha(white, 0.05); border-radius: 0; }")
+            cell.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            cell.connect("clicked", lambda b, d=day_index, h=hour: self._show_add_dialog(d, h))
+            grid_box.append(cell)
+            
+        overlay.set_child(grid_box)
+        
+        # Events layer
+        events_box = Gtk.Fixed()
+        events_box.set_size_request(-1, self.HOUR_HEIGHT * 13)
+        
+        # Get events for this day
+        events = self._get_events_for_day(day_index, day_date)
+        
+        # Group overlapping events
+        event_groups = self._group_overlapping_events(events)
+        
+        for group in event_groups:
+            num_in_group = len(group)
+            for i, event in enumerate(group):
+                widget = self._create_event_widget(event, num_in_group, i)
+                y_pos = self._time_to_y(event['start'])
+                events_box.put(widget, 0, y_pos)
+                
+        overlay.add_overlay(events_box)
+        col.append(overlay)
+        
+        return col
+        
+    def _get_events_for_day(self, day_index: int, day_date: datetime) -> list:
+        """Get all events for a specific day"""
+        events = []
+        
+        # Skip if outside semester
+        if not self._is_in_semester(day_date):
+            return events
+            
+        # Fixed schedule
+        for ev in FIXED_SCHEDULE.get(day_index, []):
+            # Skip internship if past its end date
+            if ev.get('internship') and not self._is_internship_active(day_date):
                 continue
-                
-            # Get fixed schedule for this day
-            events = FIXED_SCHEDULE.get(day, [])
+            events.append(ev.copy())
             
-            for event in events:
-                # Check if event should be shown (e.g., internship ended)
-                if 'ends' in event and day_date > event['ends']:
-                    continue
-                    
-                self._add_event_to_grid(event, day)
-                
-            # Also get custom events from database
-            try:
-                custom_events = task_manager.get_schedule_events(day)
-                for event in custom_events:
-                    self._add_event_to_grid(event, day)
-            except:
-                pass
-                
-    def _add_event_to_grid(self, event: dict, day: int):
-        """Add a single event to the grid"""
-        start_time = event.get('start', event.get('start_time', '09:00'))
-        end_time = event.get('end', event.get('end_time', '10:00'))
-        title = event.get('title', '')
-        color = event.get('color', '66, 133, 244')
-        
-        # Parse times
+        # Custom events from database
         try:
-            start_hour = int(start_time.split(':')[0])
-            start_min = int(start_time.split(':')[1])
-            end_hour = int(end_time.split(':')[0])
-            end_min = int(end_time.split(':')[1])
+            custom = task_manager.get_schedule_events(day_index)
+            for ev in custom:
+                events.append({
+                    'start': ev.get('start_time', '09:00'),
+                    'end': ev.get('end_time', '10:00'),
+                    'title': ev.get('title', ''),
+                    'color': ev.get('color', '66, 133, 244')
+                })
         except:
-            return
-        
-        # Calculate grid position
-        col = day + 1
-        row = start_hour - 7 + 1  # Offset for header and 7 AM start
-        
-        # Calculate span (in hours, rounded up)
-        start_total = start_hour * 60 + start_min
-        end_total = end_hour * 60 + end_min
-        span = max(1, (end_total - start_total + 30) // 60)
-        
-        if row < 1 or row > 13:
-            return
+            pass
             
-        # Create event widget
-        event_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        event_box.add_css_class("schedule-event")
+        return events
         
+    def _group_overlapping_events(self, events: list) -> list:
+        """Group events that overlap in time"""
+        if not events:
+            return []
+            
+        # Sort by start time
+        sorted_events = sorted(events, key=lambda e: self._time_to_minutes(e['start']))
+        
+        groups = []
+        current_group = [sorted_events[0]]
+        current_end = self._time_to_minutes(sorted_events[0]['end'])
+        
+        for event in sorted_events[1:]:
+            start = self._time_to_minutes(event['start'])
+            end = self._time_to_minutes(event['end'])
+            
+            if start < current_end:  # Overlaps
+                current_group.append(event)
+                current_end = max(current_end, end)
+            else:
+                groups.append(current_group)
+                current_group = [event]
+                current_end = end
+                
+        groups.append(current_group)
+        return groups
+        
+    def _time_to_minutes(self, time_str: str) -> int:
+        """Convert HH:MM to minutes from midnight"""
+        parts = time_str.split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+        
+    def _time_to_y(self, time_str: str) -> int:
+        """Convert time to Y position"""
+        minutes = self._time_to_minutes(time_str)
+        hours_from_7 = (minutes - 7 * 60) / 60
+        return int(hours_from_7 * self.HOUR_HEIGHT)
+        
+    def _create_event_widget(self, event: dict, num_in_slot: int, slot_index: int) -> Gtk.Box:
+        """Create an event widget with proper sizing"""
+        start = self._time_to_minutes(event['start'])
+        end = self._time_to_minutes(event['end'])
+        duration_hours = (end - start) / 60
+        height = int(duration_hours * self.HOUR_HEIGHT) - 4
+        
+        # Width calculation for overlapping events
+        base_width = 90
+        width = base_width // num_in_slot
+        x_offset = width * slot_index
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.set_size_request(width, height)
+        box.set_margin_start(x_offset + 2)
+        box.set_margin_end(2)
+        box.set_margin_top(2)
+        
+        color = event.get('color', '66, 133, 244')
         css = Gtk.CssProvider()
-        css.load_from_data(f"box {{ background: rgba({color}, 0.85); border-radius: 6px; }}".encode())
-        event_box.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        css.load_from_data(f"""
+            box {{
+                background: rgba({color}, 0.9);
+                border-radius: 6px;
+                padding: 4px 6px;
+            }}
+        """.encode())
+        box.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         
-        title_label = Gtk.Label(label=title)
-        title_label.set_halign(Gtk.Align.START)
-        title_label.set_ellipsize(3)  # PANGO_ELLIPSIZE_END
-        title_label.add_css_class("heading")
-        event_box.append(title_label)
+        title = Gtk.Label(label=event['title'])
+        title.set_halign(Gtk.Align.START)
+        title.set_ellipsize(3)  # PANGO_ELLIPSIZE_END
+        title.add_css_class("heading")
+        box.append(title)
         
-        time_label = Gtk.Label(label=f"{start_time}-{end_time}")
-        time_label.add_css_class("caption")
-        time_label.set_halign(Gtk.Align.START)
-        event_box.append(time_label)
+        if height > 30:
+            time_label = Gtk.Label(label=f"{event['start']}-{event['end']}")
+            time_label.add_css_class("caption")
+            time_label.set_halign(Gtk.Align.START)
+            box.append(time_label)
         
-        self.grid.attach(event_box, col, row, 1, span)
+        return box

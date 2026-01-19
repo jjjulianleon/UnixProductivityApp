@@ -84,13 +84,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.schedule_view = WeeklySchedule()
         self.stack.add_titled(self.schedule_view, "schedule", "Horario")
         
-        # NOW create sidebar (after stack exists)
-        sidebar = self._create_sidebar()
-        main_box.append(sidebar)
-        
-        # Header bar
+        # Header bar - create BEFORE sidebar so header_title exists
         header = self._create_header()
         self.content_box.append(header)
+        
+        # NOW create sidebar (after stack AND header exist)
+        sidebar = self._create_sidebar()
+        main_box.append(sidebar)
         
         self.content_box.append(self.stack)
         main_box.append(self.content_box)
