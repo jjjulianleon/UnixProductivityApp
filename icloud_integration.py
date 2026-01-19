@@ -58,11 +58,13 @@ class ICloudSync:
         """Connect to iCloud CalDAV server"""
         if not HAS_CALDAV or not self.config.get("enabled"):
             return False
-            
-        username = self.config.get("username")
-        password = self.config.get("password")
+        
+        # Support both key formats (apple_id or username)
+        username = self.config.get("apple_id") or self.config.get("username")
+        password = self.config.get("app_password") or self.config.get("password")
         
         if not username or not password:
+            print(f"iCloud: Missing credentials. Have: {list(self.config.keys())}")
             return False
             
         try:
@@ -78,22 +80,45 @@ class ICloudSync:
             calendars = self.principal.calendars()
             target_name = self.config.get("calendar_name", "Calendar")
             
+            # 1. Try exact match from config
             for cal in calendars:
-                # Provide a loose match or check display name
-                props = cal.get_properties([dav.DisplayName(), ])
-                name = props.get(f"{{{dav.ns('dav')}}}displayname", "")
-                if name == target_name:
-                    self.calendar = cal
-                    break
+                try:
+                    cal_name = getattr(cal, 'name', '') or str(cal)
+                    if target_name.lower() in cal_name.lower():
+                        self.calendar = cal
+                        break
+                except:
+                    pass
             
+            # 2. If not found, try common names (Home, Work)
+            if not self.calendar:
+                for name in ["Home", "Work", "Untitled"]:
+                    for cal in calendars:
+                        if name.lower() in str(cal).lower():
+                            self.calendar = cal
+                            break
+                    if self.calendar:
+                        break
+                        
+            # 3. Fallback to first non-Reminders calendar
             if not self.calendar and calendars:
-                self.calendar = calendars[0]  # Fallback to first
+                for cal in calendars:
+                    if "reminder" not in str(cal).lower():
+                        self.calendar = cal
+                        break
+                
+                # Absolute fallback
+                if not self.calendar:
+                    self.calendar = calendars[0]
                 
             self.connected = True
+            print(f"Connected to iCloud, using calendar: {self.calendar}")
             return True
             
         except Exception as e:
             print(f"iCloud connection error: {e}")
+            import traceback
+            traceback.print_exc()
             self.connected = False
             return False
             
