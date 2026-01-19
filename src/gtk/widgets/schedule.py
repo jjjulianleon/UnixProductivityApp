@@ -127,12 +127,33 @@ class AddEventDialog(Adw.Window):
         group4.add(self.recurring)
         content.append(group4)
         
+        # Color picker
+        self.color_row = Adw.ComboRow()
+        self.color_row.set_title("Color")
+        colors_list = Gtk.StringList.new([
+            "🔵 Azul",
+            "🟢 Verde", 
+            "🟡 Amarillo",
+            "🔴 Rojo",
+            "🟣 Morado",
+            "🟠 Naranja"
+        ])
+        self.color_row.set_model(colors_list)
+        group5 = Adw.PreferencesGroup()
+        group5.add(self.color_row)
+        content.append(group5)
+        
         main_box.append(content)
         
     def _on_save(self, btn):
         title = self.title_entry.get_text()
         if not title:
             return
+        
+        # Color mapping
+        colors = ['#4285f4', '#34a853', '#fbbc05', '#ea4335', '#9c27b0', '#ff5722']
+        selected_color = colors[self.color_row.get_selected()]
+        
         try:
             task_manager.add_schedule_event({
                 'title': title,
@@ -140,7 +161,7 @@ class AddEventDialog(Adw.Window):
                 'start_time': self.start_entry.get_text(),
                 'end_time': self.end_entry.get_text(),
                 'recurring': self.recurring.get_active(),
-                'color': '#4285f4'
+                'color': selected_color
             })
         except:
             pass
@@ -289,12 +310,18 @@ class WeeklySchedule(Gtk.Box):
             time_lbl.set_size_request(50, self.HOUR_HEIGHT)
             self.grid.attach(time_lbl, 0, row, 1, 1)
             
-            # Day cells
+            # Day cells with hour separator line
             for col in range(1, 8):
                 cell = Gtk.Button()
                 cell.add_css_class("flat")
                 cell.set_size_request(100, self.HOUR_HEIGHT)
                 cell.connect("clicked", lambda b, d=col-1, h=hour: self._show_add_dialog(d, h))
+                
+                # Add bottom border for hour separation
+                css = Gtk.CssProvider()
+                css.load_from_data(b"button { border-bottom: 1px solid alpha(white, 0.1); border-radius: 0; }")
+                cell.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                
                 self.grid.attach(cell, col, row, 1, 1)
                 
         # Add events
@@ -333,13 +360,19 @@ class WeeklySchedule(Gtk.Box):
         box.set_halign(Gtk.Align.FILL)
         
         color = event.get('color', '#4285f4')
+        # Convert hex to rgba with alpha for translucency
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        
         css = Gtk.CssProvider()
         css.load_from_data(f"""
             box {{
-                background: {color};
+                background: rgba({r}, {g}, {b}, 0.7);
                 border-radius: 6px;
                 padding: 4px 6px;
                 margin: 2px;
+                border-left: 3px solid rgb({r}, {g}, {b});
             }}
             label {{
                 color: white;
