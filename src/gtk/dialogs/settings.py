@@ -386,9 +386,13 @@ class SettingsDialog(Adw.PreferencesWindow):
                 # Convert tasks to deadline format
                 deadlines = []
                 for task in pending:
+                    deadline = task['deadline']
+                    # Only append time if not already present
+                    if 'T' not in deadline:
+                        deadline = deadline + 'T23:59:00'
                     deadlines.append({
                         'title': task.get('title', ''),
-                        'due_date': task['deadline'] + 'T23:59:00',
+                        'due_date': deadline,
                         'description': task.get('description', ''),
                         'type': 'task'
                     })
