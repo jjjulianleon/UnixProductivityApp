@@ -1,16 +1,20 @@
 """
 Kanban Board Widget - GTK4 with Category Filters
+Categories: Todas, Universidad, Pasantías, Personal, Fedora
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
 from gi.repository import Gtk, Adw, GLib, Gdk, GObject
-import sys
 from pathlib import Path
+import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
+
+# Obsidian Pasantías path
+PASANTIAS_MD_PATH = Path("/home/jjulianleon/Documents/Obsidian/Pasantías/Pendientes Pasantía.md")
 
 
 class DraggableTaskCard(Gtk.Box):
@@ -33,15 +37,15 @@ class DraggableTaskCard(Gtk.Box):
         priority = task.get('priority', 'media')
         self.add_css_class(f"priority-{priority}")
         
-        # Drag source
-        drag_source = Gtk.DragSource()
-        drag_source.set_actions(Gdk.DragAction.MOVE)
-        drag_source.connect("prepare", self._on_drag_prepare)
-        drag_source.connect("drag-begin", self._on_drag_begin)
-        drag_source.connect("drag-end", self._on_drag_end)
-        self.add_controller(drag_source)
+        # Only enable drag for DB tasks
+        if self.task_id:
+            drag_source = Gtk.DragSource()
+            drag_source.set_actions(Gdk.DragAction.MOVE)
+            drag_source.connect("prepare", self._on_drag_prepare)
+            drag_source.connect("drag-begin", self._on_drag_begin)
+            drag_source.connect("drag-end", self._on_drag_end)
+            self.add_controller(drag_source)
         
-        # Click
         click = Gtk.GestureClick()
         click.connect("released", self._on_click_released)
         self.add_controller(click)
@@ -70,6 +74,11 @@ class DraggableTaskCard(Gtk.Box):
             deadline_label.add_css_class("caption")
             subtitle_box.append(deadline_label)
             
+        if self.task.get('source') == 'obsidian':
+            obs_label = Gtk.Label(label="📝")
+            obs_label.set_tooltip_text("Desde Obsidian")
+            subtitle_box.append(obs_label)
+            
         self.append(subtitle_box)
         
     def _on_drag_prepare(self, source, x, y):
@@ -87,6 +96,10 @@ class DraggableTaskCard(Gtk.Box):
         if self._drag_started:
             return
         if n_press == 1:
+            if self.task.get('source') == 'obsidian':
+                import subprocess
+                subprocess.Popen(['xdg-open', str(PASANTIAS_MD_PATH)])
+                return
             from .task_detail import TaskDetailDialog
             dialog = TaskDetailDialog(self.task, parent=self.get_root())
             dialog.connect("task-updated", lambda d: self.board.refresh())
@@ -102,7 +115,6 @@ class KanbanColumn(Gtk.Box):
         self.board = board
         self.add_css_class("kanban-column")
         
-        # Drop target
         drop_target = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
         drop_target.connect("drop", self._on_drop)
         drop_target.connect("enter", self._on_drag_enter)
@@ -195,7 +207,8 @@ class KanbanBoard(Gtk.Box):
         filter_bar.append(filter_label)
         
         # Category filter buttons
-        categories = ["Todas", "Universidad", "Personal", "Fedora", "Trabajo"]
+        categories = ["Todas", "Universidad", "Pasantías", "Personal", "Fedora"]
+        self.filter_buttons = {}
         
         for cat in categories:
             btn = Gtk.ToggleButton(label=cat)
@@ -204,8 +217,8 @@ class KanbanBoard(Gtk.Box):
                 btn.set_active(True)
             btn.connect("toggled", self._on_filter_changed, cat)
             filter_bar.append(btn)
+            self.filter_buttons[cat] = btn
             
-        self.filter_buttons = filter_bar
         self.append(filter_bar)
         
         # Columns container
@@ -231,13 +244,47 @@ class KanbanBoard(Gtk.Box):
     def _on_filter_changed(self, btn, category):
         if btn.get_active():
             self.current_filter = category
-            # Deactivate other buttons
-            for child in self.filter_buttons:
-                if isinstance(child, Gtk.ToggleButton) and child != btn:
-                    child.set_active(False)
+            for cat, b in self.filter_buttons.items():
+                if cat != category:
+                    b.set_active(False)
             self.refresh()
         elif self.current_filter == category:
-            btn.set_active(True)  # Prevent deselecting current
+            btn.set_active(True)
+            
+    def _load_pasantias_from_obsidian(self) -> list:
+        """Load pending tasks from Obsidian pasantías file"""
+        tasks = []
+        if not PASANTIAS_MD_PATH.exists():
+            return tasks
+            
+        try:
+            content = PASANTIAS_MD_PATH.read_text()
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('- [ ]'):
+                    task_text = line[5:].strip()
+                    tasks.append({
+                        'id': None,
+                        'title': task_text,
+                        'category': 'Pasantías',
+                        'priority': 'media',
+                        'status': 'pendiente',
+                        'source': 'obsidian'
+                    })
+                elif line.startswith('- [x]'):
+                    task_text = line[5:].strip()
+                    tasks.append({
+                        'id': None,
+                        'title': task_text,
+                        'category': 'Pasantías',
+                        'priority': 'media',
+                        'status': 'completado',
+                        'source': 'obsidian'
+                    })
+        except:
+            pass
+            
+        return tasks
             
     def refresh(self):
         for status, column in self.columns.items():
@@ -251,6 +298,13 @@ class KanbanBoard(Gtk.Box):
                     tasks = [t for t in tasks if t.get('category') == self.current_filter]
             except:
                 tasks = []
+                
+            # Add Obsidian pasantías tasks
+            if self.current_filter in ["Todas", "Pasantías"]:
+                obsidian_tasks = self._load_pasantias_from_obsidian()
+                for t in obsidian_tasks:
+                    if t.get('status') == status:
+                        tasks.append(t)
                 
             column.update_count(len(tasks))
             
