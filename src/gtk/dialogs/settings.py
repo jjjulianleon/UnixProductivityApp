@@ -174,6 +174,13 @@ class SettingsDialog(Adw.PreferencesWindow):
         save_sync_btn.connect("clicked", self._on_save_sync)
         save_group.add(save_sync_btn)
         
+        # Push all button
+        push_btn = Gtk.Button(label="⬆ Sincronizar todo ahora")
+        push_btn.set_margin_top(8)
+        push_btn.set_tooltip_text("Envía todas las tareas con deadline a iCloud")
+        push_btn.connect("clicked", self._on_push_all_to_icloud)
+        save_group.add(push_btn)
+        
         sync_page.add(save_group)
         self.add(sync_page)
         
@@ -350,3 +357,56 @@ class SettingsDialog(Adw.PreferencesWindow):
                     self.teams_url.set_text(teams.get("url", ""))
             except:
                 pass
+                
+    def _on_push_all_to_icloud(self, btn):
+        """Push all existing tasks with deadlines to iCloud"""
+        btn.set_label("Sincronizando...")
+        btn.set_sensitive(False)
+        
+        try:
+            # Get all tasks with deadlines
+            tasks = task_manager.get_tasks_with_deadlines()
+            pending = [t for t in tasks if t.get('status') != 'completado' and t.get('deadline')]
+            
+            if not pending:
+                btn.set_label("Sin tareas para sincronizar")
+                btn.set_sensitive(True)
+                return
+                
+            # Try to sync with iCloud
+            try:
+                from icloud_integration import ICloudSync
+                icloud = ICloudSync()
+                
+                if not icloud.config.get("enabled"):
+                    btn.set_label("⚠ iCloud no habilitado")
+                    btn.set_sensitive(True)
+                    return
+                    
+                # Convert tasks to deadline format
+                deadlines = []
+                for task in pending:
+                    deadlines.append({
+                        'title': task.get('title', ''),
+                        'due_date': task['deadline'] + 'T23:59:00',
+                        'description': task.get('description', ''),
+                        'type': 'task'
+                    })
+                    
+                result = icloud.sync_deadlines_to_icloud(deadlines)
+                created = result.get('created', 0)
+                skipped = result.get('skipped', 0)
+                
+                btn.set_label(f"✓ {created} nuevos, {skipped} existentes")
+                
+            except ImportError:
+                btn.set_label("⚠ caldav no instalado")
+            except Exception as e:
+                btn.set_label(f"⚠ Error: {str(e)[:20]}")
+                print(f"iCloud sync error: {e}")
+                
+        except Exception as e:
+            btn.set_label(f"⚠ Error")
+            print(f"Push error: {e}")
+            
+        btn.set_sensitive(True)
