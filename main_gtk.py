@@ -44,8 +44,36 @@ class UnixProductivityApp(Adw.Application):
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
             )
         
+        # Load saved font setting
+        self._apply_saved_font()
+        
         # Setup actions
         self._setup_actions()
+        
+    def _apply_saved_font(self):
+        """Apply saved font from settings on startup"""
+        try:
+            from src.core.task_manager import task_manager
+            fonts = [
+                "",  # System default
+                "'Source Code Pro'",
+                "'Inter'",
+                "'Roboto'",
+                "'Ubuntu'",
+                "'Fira Code'"
+            ]
+            saved_font_idx = task_manager.get_setting('app_font', 0)
+            if saved_font_idx and saved_font_idx > 0 and saved_font_idx < len(fonts):
+                font_family = fonts[saved_font_idx]
+                css = Gtk.CssProvider()
+                css.load_from_data(f"* {{ font-family: {font_family}, sans-serif; }}".encode())
+                Gtk.StyleContext.add_provider_for_display(
+                    Gdk.Display.get_default(),
+                    css,
+                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
+        except Exception as e:
+            print(f"Font loading error: {e}")
         
     def _setup_actions(self):
         """Setup application actions"""

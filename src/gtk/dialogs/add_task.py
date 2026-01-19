@@ -110,6 +110,11 @@ class AddTaskDialog(Adw.Window):
         self.desc_view.set_wrap_mode(Gtk.WrapMode.WORD)
         self.desc_view.set_size_request(-1, 100)
         self.desc_view.add_css_class("card")
+        # Add padding inside the text area
+        self.desc_view.set_left_margin(12)
+        self.desc_view.set_right_margin(12)
+        self.desc_view.set_top_margin(10)
+        self.desc_view.set_bottom_margin(10)
         
         scroll = Gtk.ScrolledWindow()
         scroll.set_child(self.desc_view)

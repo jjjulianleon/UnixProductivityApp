@@ -207,12 +207,6 @@ class MainWindow(Adw.ApplicationWindow):
         add_btn.connect("clicked", lambda _: self.show_add_task_dialog())
         header.pack_start(add_btn)
         
-        # Search button
-        search_btn = Gtk.Button()
-        search_btn.set_icon_name("system-search-symbolic")
-        search_btn.set_tooltip_text("Buscar (Ctrl+F)")
-        header.pack_end(search_btn)
-        
         # Menu button
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
