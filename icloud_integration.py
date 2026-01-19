@@ -199,17 +199,53 @@ class ICloudSync:
             end = start + timedelta(days=1)
             events = self.calendar.date_search(start=start, end=end, expand=True)
             
+            
             for event in events:
-                vevent = event.instance.vevent
-                existing_title = str(vevent.summary.value).lower()
-                existing_start = vevent.dtstart.value
-                
-                # Fuzzy match on title and exact match on date
-                if title.lower()[:20] in existing_title or existing_title in title.lower()[:20]:
-                    return True
+                try:
+                    # Parse event data safely
+                    if hasattr(event, 'vobject_instance') and event.vobject_instance:
+                        vevent = event.vobject_instance.vevent
+                    elif hasattr(event, 'instance') and event.instance:
+                        vevent = event.instance.vevent
+                    else:
+                        # Fallback: try to parse raw data
+                        import vobject
+                        if event.data:
+                            vevent = vobject.readOne(event.data).vevent
+                        else:
+                            continue
+                            
+                    existing_title = str(vevent.summary.value).strip()
+                    existing_start = vevent.dtstart.value
+                    
+                    # Normalize dates for comparison
+                    if isinstance(existing_start, datetime):
+                        # Compare date part only to avoid timezone headaches
+                        # or if within 1 hour matches
+                        if existing_start.date() != start.date():
+                            continue
+                    else:
+                        # Date object
+                        if existing_start != start.date():
+                            continue
+                            
+                    # Check title match (more exact than before)
+                    # We check:
+                    # 1. Exact match
+                    # 2. Main title contained in existing (for prefixed ones)
+                    t1 = title.lower().strip()
+                    t2 = existing_title.lower().strip()
+                    
+                    if t1 == t2 or t1 in t2:
+                        return True
+                        
+                except Exception as e:
+                    # print(f"Error checking event: {e}")
+                    continue
                     
             return False
-        except Exception:
+        except Exception as e:
+            print(f"Error searching events: {e}")
             return False
     
     def sync_deadlines_to_icloud(self, deadlines: list) -> dict:
@@ -225,10 +261,13 @@ class ICloudSync:
         
         for dl in deadlines:
             try:
-                title = f"📚 {dl.get('title', 'Tarea')}"
+                # Construct full title FIRST
+                base_title = dl.get('title', 'Tarea')
                 course = dl.get('tag', dl.get('course_name', ''))
+                
+                full_title = f"📚 {base_title}"
                 if course:
-                    title = f"📚 [{course}] {dl.get('title', 'Tarea')}"
+                    full_title = f"📚 [{course}] {base_title}"
                 
                 due_date_str = dl.get('due_date', '')
                 if not due_date_str:
@@ -237,20 +276,24 @@ class ICloudSync:
                     
                 due_dt = datetime.fromisoformat(due_date_str)
                 
-                # Check if already exists
-                if self.event_exists(dl.get('title', ''), due_dt):
+                # Check if ALREADY exists using the FULL title
+                if self.event_exists(full_title, due_dt):
+                    skipped += 1
+                    continue
+                
+                # Double check with base title just in case
+                if self.event_exists(base_title, due_dt):
                     skipped += 1
                     continue
                 
                 # Create as all-day event or with specific time
-                # D2L deadlines usually have a specific time
                 end_dt = due_dt + timedelta(hours=1)
                 
                 description = dl.get('description', '')
                 url = dl.get('url', '')
                 location = f"D2L - {course}" if course else "D2L Brightspace"
                 
-                if self.add_event(title, due_dt, end_dt, location):
+                if self.add_event(full_title, due_dt, end_dt, location):
                     created += 1
                 else:
                     skipped += 1
