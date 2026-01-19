@@ -2,18 +2,19 @@
 iCloud Calendar Integration
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Dict, Optional
 from pathlib import Path
 
-# Try to import caldav
+# Try to import caldav and icalendar
 try:
     import caldav
     from caldav.elements import dav, cdav
+    import icalendar
     HAS_CALDAV = True
 except ImportError:
     HAS_CALDAV = False
-    print("caldav library required: pip install caldav")
+    print("caldav and icalendar libraries required: pip install caldav icalendar")
 
 CONFIG_DIR = Path.home() / ".config" / "calendar_widget"
 ICLOUD_CONFIG_FILE = CONFIG_DIR / "icloud_config.json"
@@ -38,16 +39,16 @@ class ICloudSync:
         except (FileNotFoundError, json.JSONDecodeError):
             return {
                 "enabled": False,
-                "username": "",
-                "password": "",  # App-specific password
-                "calendar_name": "Calendar",  # Default calendar name
+                "apple_id": "",
+                "app_password": "",
+                "calendar_name": "Calendar",
                 "last_sync": None
             }
             
     def save_config(self, username, password, enabled=True, calendar_name="Calendar"):
         """Save credentials"""
-        self.config["username"] = username
-        self.config["password"] = password
+        self.config["apple_id"] = username
+        self.config["app_password"] = password
         self.config["enabled"] = enabled
         self.config["calendar_name"] = calendar_name
         
@@ -59,12 +60,11 @@ class ICloudSync:
         if not HAS_CALDAV or not self.config.get("enabled"):
             return False
         
-        # Support both key formats (apple_id or username)
-        username = self.config.get("apple_id") or self.config.get("username")
-        password = self.config.get("app_password") or self.config.get("password")
+        username = self.config.get("apple_id")
+        password = self.config.get("app_password")
         
         if not username or not password:
-            print(f"iCloud: Missing credentials. Have: {list(self.config.keys())}")
+            print(f"iCloud: Missing credentials.")
             return False
             
         try:
@@ -112,7 +112,7 @@ class ICloudSync:
                     self.calendar = calendars[0]
                 
             self.connected = True
-            print(f"Connected to iCloud, using calendar: {self.calendar}")
+            # print(f"Connected to iCloud, using calendar: {self.calendar}")
             return True
             
         except Exception as e:
@@ -133,33 +133,50 @@ class ICloudSync:
             results = []
             
             for event in events:
-                # Parse vObject
-                vevent = event.instance.vevent
-                
-                uid = str(vevent.uid.value)
-                summary = str(vevent.summary.value)
-                dtstart = vevent.dtstart.value
-                dtend = vevent.dtend.value if hasattr(vevent, 'dtend') else dtstart
-                location = str(vevent.location.value) if hasattr(vevent, 'location') else ""
-                
-                # Normalize timezones
-                if isinstance(dtstart, datetime):
-                    if dtstart.tzinfo:
+                try:
+                    # Parse with icalendar
+                    cal = icalendar.Calendar.from_ical(event.data)
+                    vevent = None
+                    for component in cal.walk():
+                        if component.name == "VEVENT":
+                            vevent = component
+                            break
+                    if not vevent:
+                        continue # Skip if no VEVENT found
+                    
+                    uid = str(vevent.get('UID'))
+                    summary = str(vevent.get('SUMMARY'))
+                    dtstart_ical = vevent.get('DTSTART')
+                    dtend_ical = vevent.get('DTEND')
+                    
+                    dtstart = dtstart_ical.dt if dtstart_ical else None
+                    dtend = dtend_ical.dt if dtend_ical else dtstart
+                    
+                    location = str(vevent.get('LOCATION')) if vevent.get('LOCATION') else ""
+                    
+                    # Normalize timezones and convert date objects to datetime
+                    if isinstance(dtstart, date) and not isinstance(dtstart, datetime):
+                        dtstart = datetime.combine(dtstart, datetime.min.time())
+                    elif isinstance(dtstart, datetime) and dtstart.tzinfo:
                         dtstart = dtstart.astimezone().replace(tzinfo=None) # Local time
-                
-                if isinstance(dtend, datetime):
-                    if dtend.tzinfo:
+                    
+                    if isinstance(dtend, date) and not isinstance(dtend, datetime):
+                        dtend = datetime.combine(dtend, datetime.min.time())
+                    elif isinstance(dtend, datetime) and dtend.tzinfo:
                         dtend = dtend.astimezone().replace(tzinfo=None)
-                
-                results.append({
-                    'uid': uid,
-                    'title': summary,
-                    'start_time': dtstart,  # datetime object
-                    'end_time': dtend,      # datetime object
-                    'location': location,
-                    'source': 'icloud',
-                    'dav_object': event     # Keep reference for updates
-                })
+                    
+                    results.append({
+                        'uid': uid,
+                        'title': summary,
+                        'start_time': dtstart,  # datetime object
+                        'end_time': dtend,      # datetime object
+                        'location': location,
+                        'source': 'icloud',
+                        'dav_object': event     # Keep reference for updates
+                    })
+                except Exception as parse_e:
+                    print(f"Error parsing iCloud event: {parse_e}")
+                    continue
                 
             return results
         except Exception as e:
@@ -190,67 +207,57 @@ class ICloudSync:
         return False  # To be implemented
     
     def event_exists(self, title: str, start: datetime) -> bool:
-        """Check if an event with similar title and start time already exists"""
+        """Check if an event with title and date already exists"""
         if not self.connected and not self.connect():
             return False
             
         try:
             # Search for events on that day
             end = start + timedelta(days=1)
+            # Use caldav's date_search
             events = self.calendar.date_search(start=start, end=end, expand=True)
             
+            target_title = title.lower().strip()
+            target_date = start.date()
             
             for event in events:
                 try:
-                    # Parse event data safely
-                    if hasattr(event, 'vobject_instance') and event.vobject_instance:
-                        vevent = event.vobject_instance.vevent
-                    elif hasattr(event, 'instance') and event.instance:
-                        vevent = event.instance.vevent
-                    else:
-                        # Fallback: try to parse raw data
-                        import vobject
-                        if event.data:
-                            vevent = vobject.readOne(event.data).vevent
-                        else:
-                            continue
+                    # Parse with icalendar
+                    cal = icalendar.Calendar.from_ical(event.data)
+                    for component in cal.walk():
+                        if component.name == "VEVENT":
+                            summary = str(component.get('SUMMARY'))
+                            dtstart_ical = component.get('DTSTART')
+                            dtstart = dtstart_ical.dt if dtstart_ical else None
                             
-                    existing_title = str(vevent.summary.value).strip()
-                    existing_start = vevent.dtstart.value
-                    
-                    # Normalize dates for comparison
-                    if isinstance(existing_start, datetime):
-                        # Compare date part only to avoid timezone headaches
-                        # or if within 1 hour matches
-                        if existing_start.date() != start.date():
-                            continue
-                    else:
-                        # Date object
-                        if existing_start != start.date():
-                            continue
+                            # Handle timezone awareness for comparison
+                            if isinstance(dtstart, datetime):
+                                event_date = dtstart.date()
+                            elif isinstance(dtstart, date):
+                                event_date = dtstart
+                            else:
+                                continue # Skip if dtstart is not a date or datetime
+                                
+                            if event_date != target_date:
+                                continue
+                                
+                            existing_title = summary.lower().strip()
                             
-                    # Check title match (more exact than before)
-                    # We check:
-                    # 1. Exact match
-                    # 2. Main title contained in existing (for prefixed ones)
-                    t1 = title.lower().strip()
-                    t2 = existing_title.lower().strip()
-                    
-                    if t1 == t2 or t1 in t2:
-                        return True
-                        
-                except Exception as e:
-                    # print(f"Error checking event: {e}")
+                            # Check for specific match
+                            if target_title == existing_title or target_title in existing_title:
+                                return True
+                except Exception as parse_e:
+                    # print(f"Error checking event: {parse_e}")
                     continue
                     
             return False
         except Exception as e:
-            print(f"Error searching events: {e}")
+            print(f"Error checking existence: {e}")
             return False
     
     def sync_deadlines_to_icloud(self, deadlines: list) -> dict:
         """
-        Sync D2L/Brightspace deadlines to iCloud Calendar.
+        Sync deadlines to iCloud Calendar.
         Returns count of created/skipped events.
         """
         if not self.connected and not self.connect():
@@ -261,7 +268,6 @@ class ICloudSync:
         
         for dl in deadlines:
             try:
-                # Construct full title FIRST
                 base_title = dl.get('title', 'Tarea')
                 course = dl.get('tag', dl.get('course_name', ''))
                 
@@ -276,21 +282,17 @@ class ICloudSync:
                     
                 due_dt = datetime.fromisoformat(due_date_str)
                 
-                # Check if ALREADY exists using the FULL title
+                # Check for duplicate
                 if self.event_exists(full_title, due_dt):
                     skipped += 1
                     continue
                 
-                # Double check with base title just in case
+                # Double check with base title
                 if self.event_exists(base_title, due_dt):
                     skipped += 1
                     continue
                 
-                # Create as all-day event or with specific time
                 end_dt = due_dt + timedelta(hours=1)
-                
-                description = dl.get('description', '')
-                url = dl.get('url', '')
                 location = f"D2L - {course}" if course else "D2L Brightspace"
                 
                 if self.add_event(full_title, due_dt, end_dt, location):
@@ -299,7 +301,7 @@ class ICloudSync:
                     skipped += 1
                     
             except Exception as e:
-                print(f"Error syncing deadline to iCloud: {e}")
+                print(f"Error syncing deadline: {e}")
                 skipped += 1
                 
         return {'created': created, 'skipped': skipped}
