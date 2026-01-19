@@ -200,6 +200,9 @@ class KanbanBoard(Gtk.Box):
         self.refresh()
         
     def _setup_ui(self):
+        # Header with filter and search
+        header_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        
         # Filter bar
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         
@@ -219,7 +222,27 @@ class KanbanBoard(Gtk.Box):
             filter_bar.append(btn)
             self.filter_buttons[cat] = btn
             
-        self.append(filter_bar)
+        header_bar.append(filter_bar)
+        
+        # Spacer
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        header_bar.append(spacer)
+        
+        # Search box
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        search_icon = Gtk.Image.new_from_icon_name("system-search-symbolic")
+        search_box.append(search_icon)
+        
+        self.search_entry = Gtk.Entry()
+        self.search_entry.set_placeholder_text("Buscar tareas...")
+        self.search_entry.set_width_chars(20)
+        self.search_entry.connect("changed", self._on_search_changed)
+        search_box.append(self.search_entry)
+        
+        header_bar.append(search_box)
+        
+        self.append(header_bar)
         
         # Columns container
         self.columns_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
@@ -240,6 +263,10 @@ class KanbanBoard(Gtk.Box):
             self.columns_box.append(column)
             
         self.append(self.columns_box)
+        
+    def _on_search_changed(self, entry):
+        """Handle search text change"""
+        self.refresh()
         
     def _on_filter_changed(self, btn, category):
         if btn.get_active():
@@ -287,15 +314,25 @@ class KanbanBoard(Gtk.Box):
         return tasks
             
     def refresh(self):
+        search_text = self.search_entry.get_text().lower().strip() if hasattr(self, 'search_entry') else ""
+        
         for status, column in self.columns.items():
             column.clear_tasks()
             
             try:
                 tasks = task_manager.get_all_tasks(status=status)
                 
-                # Apply category filter
+                # Apply category filter (map Trabajo -> Pasantías)
                 if self.current_filter != "Todas":
-                    tasks = [t for t in tasks if t.get('category') == self.current_filter]
+                    if self.current_filter == "Pasantías":
+                        # Include both Pasantías and Trabajo
+                        tasks = [t for t in tasks if t.get('category') in ['Pasantías', 'Trabajo']]
+                    else:
+                        tasks = [t for t in tasks if t.get('category') == self.current_filter]
+                        
+                # Apply search filter
+                if search_text:
+                    tasks = [t for t in tasks if search_text in t.get('title', '').lower()]
             except:
                 tasks = []
                 
@@ -304,7 +341,9 @@ class KanbanBoard(Gtk.Box):
                 obsidian_tasks = self._load_pasantias_from_obsidian()
                 for t in obsidian_tasks:
                     if t.get('status') == status:
-                        tasks.append(t)
+                        # Apply search to obsidian tasks too
+                        if not search_text or search_text in t.get('title', '').lower():
+                            tasks.append(t)
                 
             column.update_count(len(tasks))
             

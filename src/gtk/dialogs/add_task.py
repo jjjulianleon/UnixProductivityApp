@@ -163,7 +163,7 @@ class AddTaskDialog(Adw.Window):
         start, end = buffer.get_bounds()
         description = buffer.get_text(start, end, False)
         
-        # Save task
+        # Save task to database
         try:
             task_manager.add_task(
                 title=title,
@@ -172,6 +172,30 @@ class AddTaskDialog(Adw.Window):
                 priority=priority,
                 deadline=self.selected_deadline
             )
+            
+            # If Trabajo category, also save to Obsidian Pasantías file
+            if category == "Trabajo":
+                self._save_to_obsidian_pasantias(title)
+                
             self.close()
         except Exception as e:
             print(f"Error saving task: {e}")
+            
+    def _save_to_obsidian_pasantias(self, title: str):
+        """Append task to Obsidian Pasantías .md file"""
+        PASANTIAS_MD_PATH = Path("/home/jjulianleon/Documents/Obsidian/Pasantías/Pendientes Pasantía.md")
+        try:
+            if not PASANTIAS_MD_PATH.parent.exists():
+                PASANTIAS_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
+                
+            # Create or append
+            if PASANTIAS_MD_PATH.exists():
+                content = PASANTIAS_MD_PATH.read_text()
+            else:
+                content = "# Pendientes Pasantía\n\n"
+                
+            # Add new task
+            content += f"\n- [ ] {title}"
+            PASANTIAS_MD_PATH.write_text(content)
+        except Exception as e:
+            print(f"Error saving to Obsidian: {e}")
