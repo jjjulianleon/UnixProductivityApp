@@ -85,11 +85,11 @@ class DashboardView(Gtk.Box):
         """Get time-appropriate greeting"""
         hour = datetime.now().hour
         if hour < 12:
-            return "Buenos días"
+            return "Buenos días, Julian"
         elif hour < 18:
-            return "Buenas tardes"
+            return "Buenas tardes, Julian"
         else:
-            return "Buenas noches"
+            return "Buenas noches, Julian"
             
     def _create_stat_card(self, label: str, value: str, icon: str) -> Gtk.Box:
         """Create a statistics card"""

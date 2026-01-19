@@ -61,6 +61,7 @@ cp "$SOURCE_DIR/widget_gtk.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/ics_integration.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/icloud_integration.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/requirements_gtk.txt" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/plasmoid_backend.py" "$INSTALL_DIR/"
 echo -e "${GREEN}✓ Archivos copiados a $INSTALL_DIR${NC}"
 
 # Copy icon
