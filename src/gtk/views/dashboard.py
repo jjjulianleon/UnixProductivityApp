@@ -258,7 +258,9 @@ class DashboardView(Gtk.Box):
     def _days_until(self, deadline: str) -> int:
         """Calculate days until deadline"""
         try:
-            deadline_date = datetime.strptime(deadline, "%Y-%m-%d").date()
+            # Handle both YYYY-MM-DD and YYYY-MM-DDTHH:MM:SS formats
+            date_part = deadline[:10]  # Extract just YYYY-MM-DD
+            deadline_date = datetime.strptime(date_part, "%Y-%m-%d").date()
             today = datetime.now().date()
             return (deadline_date - today).days
         except:
