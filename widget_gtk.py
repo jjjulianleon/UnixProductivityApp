@@ -103,10 +103,44 @@ class WidgetApp(Adw.Application):
                 background-color: @accent_color;
                 border-radius: 3px;
             }
+            .translucent-btn {
+                background-color: alpha(@accent_color, 0.5);
+                color: white;
+                border: none;
+                box-shadow: none;
+            }
+            
+            .translucent-btn:hover {
+                background-color: alpha(@accent_color, 0.7);
+            }
         """)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
+        
+        # Load saved font
+        self._load_font()
+        
+    def _load_font(self):
+        try:
+            fonts = [
+                "",  # System default
+                "'Source Code Pro'",
+                "'Inter'",
+                "'Roboto'",
+                "'Ubuntu'",
+                "'Fira Code'"
+            ]
+            saved_font_idx = task_manager.get_setting('app_font', 0)
+            if saved_font_idx and saved_font_idx > 0 and saved_font_idx < len(fonts):
+                font_family = fonts[saved_font_idx]
+                css = Gtk.CssProvider()
+                css.load_from_data(f"* {{ font-family: {font_family}, sans-serif; }}".encode())
+                Gtk.StyleContext.add_provider_for_display(
+                    Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
+        except Exception as e:
+            print(f"Font loading error: {e}")
 
 
 class WidgetWindow(Adw.ApplicationWindow):
@@ -187,11 +221,15 @@ class WidgetWindow(Adw.ApplicationWindow):
         
         # Open app button
         app_btn = Gtk.Button(label="Abrir App")
-        app_btn.add_css_class("suggested-action")
+        app_btn.add_css_class("translucent-btn")
         app_btn.connect("clicked", self._open_main_app)
         bar.append(app_btn)
         
         return bar
+
+
+
+
         
     def _create_stats_row(self) -> Gtk.Box:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -523,7 +561,7 @@ class WidgetWindow(Adw.ApplicationWindow):
         self.pomo_play_btn = Gtk.Button()
         self.pomo_play_btn.set_icon_name("media-playback-start-symbolic")
         self.pomo_play_btn.add_css_class("circular")
-        self.pomo_play_btn.add_css_class("suggested-action")
+        self.pomo_play_btn.add_css_class("translucent-btn")
         self.pomo_play_btn.connect("clicked", self._toggle_pomodoro)
         btns.append(self.pomo_play_btn)
         
