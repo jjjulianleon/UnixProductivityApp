@@ -335,14 +335,21 @@ class KanbanBoard(Gtk.Box):
                     tasks = [t for t in tasks if search_text in t.get('title', '').lower()]
             except:
                 tasks = []
+            
+            # Get existing task titles to avoid duplicates
+            existing_titles = {t.get('title', '').lower().strip() for t in tasks}
                 
-            # Add Obsidian pasantías tasks
+            # Add Obsidian pasantías tasks (only if not already in DB)
             if self.current_filter in ["Todas", "Pasantías"]:
                 obsidian_tasks = self._load_pasantias_from_obsidian()
                 for t in obsidian_tasks:
                     if t.get('status') == status:
+                        task_title = t.get('title', '').lower().strip()
+                        # Skip if task already exists from DB
+                        if task_title in existing_titles:
+                            continue
                         # Apply search to obsidian tasks too
-                        if not search_text or search_text in t.get('title', '').lower():
+                        if not search_text or search_text in task_title:
                             tasks.append(t)
                 
             column.update_count(len(tasks))
