@@ -1,17 +1,17 @@
 """
-Quick Notes Widget - GTK4
-With click to view/edit notes
+Rough Notes Widget - GTK4
+Reads and writes to Obsidian vault
 """
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
 from gi.repository import Gtk, Adw, GLib, GObject
-import sys
 from pathlib import Path
+import os
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-from src.core.task_manager import task_manager
+# Obsidian vault path
+OBSIDIAN_NOTES_PATH = Path("/home/jjulianleon/Documents/Obsidian/Rough Notes")
 
 
 class NoteDetailDialog(Adw.Window):
@@ -21,14 +21,14 @@ class NoteDetailDialog(Adw.Window):
         'note-updated': (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
     
-    def __init__(self, note: dict = None, parent=None):
+    def __init__(self, note_path: Path = None, parent=None):
         super().__init__()
-        self.note = note
-        self.note_id = note.get('id') if note else None
-        self.is_new = note is None
+        self.note_path = note_path
+        self.is_new = note_path is None
         
-        self.set_title("Nueva Nota" if self.is_new else note.get('title', 'Nota'))
-        self.set_default_size(400, 400)
+        title = "Nueva Nota" if self.is_new else note_path.stem
+        self.set_title(title)
+        self.set_default_size(500, 500)
         self.set_modal(True)
         if parent:
             self.set_transient_for(parent)
@@ -36,11 +36,10 @@ class NoteDetailDialog(Adw.Window):
         self._setup_ui()
         
     def _setup_ui(self):
-        """Setup dialog UI"""
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_content(main_box)
         
-        # Header bar
+        # Header
         header = Adw.HeaderBar()
         header.add_css_class("flat")
         
@@ -63,66 +62,90 @@ class NoteDetailDialog(Adw.Window):
         main_box.append(header)
         
         # Content
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        content.set_margin_top(20)
-        content.set_margin_bottom(20)
-        content.set_margin_start(20)
-        content.set_margin_end(20)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content.set_margin_top(16)
+        content.set_margin_bottom(16)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
         
         # Title
         title_group = Adw.PreferencesGroup()
         self.title_entry = Adw.EntryRow()
-        self.title_entry.set_title("Título")
-        if self.note:
-            self.title_entry.set_text(self.note.get('title', ''))
+        self.title_entry.set_title("Nombre del archivo")
+        if self.note_path:
+            self.title_entry.set_text(self.note_path.stem)
         title_group.add(self.title_entry)
         content.append(title_group)
         
-        # Content
-        content_group = Adw.PreferencesGroup()
-        content_group.set_title("Contenido")
+        # Content editor
+        content_label = Gtk.Label(label="Contenido")
+        content_label.set_halign(Gtk.Align.START)
+        content_label.add_css_class("title-4")
+        content.append(content_label)
         
         scroll = Gtk.ScrolledWindow()
-        scroll.set_min_content_height(200)
         scroll.set_vexpand(True)
+        scroll.set_min_content_height(250)
         
         self.content_view = Gtk.TextView()
         self.content_view.set_wrap_mode(Gtk.WrapMode.WORD)
         self.content_view.add_css_class("card")
-        if self.note:
-            self.content_view.get_buffer().set_text(self.note.get('content', ''))
+        self.content_view.set_left_margin(8)
+        self.content_view.set_right_margin(8)
+        self.content_view.set_top_margin(8)
+        self.content_view.set_bottom_margin(8)
+        
+        # Load content if existing
+        if self.note_path and self.note_path.exists():
+            try:
+                text = self.note_path.read_text()
+                self.content_view.get_buffer().set_text(text)
+            except:
+                pass
+                
         scroll.set_child(self.content_view)
-        content_group.add(scroll)
-        content.append(content_group)
+        content.append(scroll)
         
         main_box.append(content)
         
     def _on_save(self, btn):
-        """Save the note"""
-        title = self.title_entry.get_text()
+        title = self.title_entry.get_text().strip()
         if not title:
             self.title_entry.add_css_class("error")
             return
+            
+        # Sanitize filename
+        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
+        if not safe_title:
+            safe_title = "nota"
             
         buffer = self.content_view.get_buffer()
         start, end = buffer.get_bounds()
         content = buffer.get_text(start, end, False)
         
+        # Ensure directory exists
+        OBSIDIAN_NOTES_PATH.mkdir(parents=True, exist_ok=True)
+        
+        # Determine file path
+        if self.is_new or self.title_entry.get_text() != self.note_path.stem:
+            new_path = OBSIDIAN_NOTES_PATH / f"{safe_title}.md"
+            # Delete old file if renamed
+            if not self.is_new and self.note_path.exists():
+                self.note_path.unlink()
+        else:
+            new_path = self.note_path
+            
         try:
-            if self.is_new:
-                task_manager.add_quick_note(title, content)
-            else:
-                task_manager.update_quick_note(self.note_id, title=title, content=content)
+            new_path.write_text(content)
             self.emit("note-updated")
             self.close()
         except Exception as e:
             print(f"Error saving note: {e}")
             
     def _on_delete(self, btn):
-        """Delete note"""
         dialog = Adw.MessageDialog(transient_for=self)
         dialog.set_heading("Eliminar nota")
-        dialog.set_body(f"¿Eliminar '{self.note.get('title')}'?")
+        dialog.set_body(f"¿Eliminar '{self.note_path.stem}'?")
         dialog.add_response("cancel", "Cancelar")
         dialog.add_response("delete", "Eliminar")
         dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
@@ -130,10 +153,10 @@ class NoteDetailDialog(Adw.Window):
         dialog.present()
         
     def _on_delete_response(self, dialog, response):
-        """Handle delete response"""
         if response == "delete":
             try:
-                task_manager.delete_quick_note(self.note_id)
+                if self.note_path.exists():
+                    self.note_path.unlink()
                 self.emit("note-updated")
                 self.close()
             except Exception as e:
@@ -142,7 +165,7 @@ class NoteDetailDialog(Adw.Window):
 
 
 class QuickNotes(Gtk.Box):
-    """Quick notes widget"""
+    """Rough Notes widget - reads from Obsidian vault"""
     
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -155,22 +178,36 @@ class QuickNotes(Gtk.Box):
         self.refresh()
         
     def _setup_ui(self):
-        """Setup notes UI"""
         # Header
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         
-        title = Gtk.Label(label="Notas Rápidas")
+        title = Gtk.Label(label="Rough Notes")
         title.add_css_class("title-2")
         title.set_halign(Gtk.Align.START)
         title.set_hexpand(True)
         header.append(title)
         
+        # Path indicator
+        path_label = Gtk.Label(label=str(OBSIDIAN_NOTES_PATH))
+        path_label.add_css_class("dim-label")
+        path_label.add_css_class("caption")
+        path_label.set_ellipsize(3)
+        header.append(path_label)
+        
         add_btn = Gtk.Button()
         add_btn.set_icon_name("list-add-symbolic")
         add_btn.add_css_class("suggested-action")
         add_btn.add_css_class("circular")
+        add_btn.set_margin_start(12)
         add_btn.connect("clicked", self._on_add_note)
         header.append(add_btn)
+        
+        refresh_btn = Gtk.Button()
+        refresh_btn.set_icon_name("view-refresh-symbolic")
+        refresh_btn.add_css_class("flat")
+        refresh_btn.add_css_class("circular")
+        refresh_btn.connect("clicked", lambda _: self.refresh())
+        header.append(refresh_btn)
         
         self.append(header)
         
@@ -191,31 +228,38 @@ class QuickNotes(Gtk.Box):
         self.append(scroll)
         
     def _on_add_note(self, btn):
-        """Show add note dialog"""
         dialog = NoteDetailDialog(parent=self.get_root())
         dialog.connect("note-updated", lambda d: self.refresh())
         dialog.present()
         
     def refresh(self):
-        """Refresh notes"""
         # Clear existing
-        while True:
-            child = self.notes_flow.get_first_child()
-            if child:
-                self.notes_flow.remove(child)
-            else:
-                break
-                
-        try:
-            notes = task_manager.get_all_quick_notes()
-        except:
-            notes = []
+        while child := self.notes_flow.get_first_child():
+            self.notes_flow.remove(child)
             
+        # Load notes from Obsidian vault
+        notes = []
+        if OBSIDIAN_NOTES_PATH.exists():
+            for file in OBSIDIAN_NOTES_PATH.glob("*.md"):
+                try:
+                    stat = file.stat()
+                    notes.append({
+                        'path': file,
+                        'title': file.stem,
+                        'modified': stat.st_mtime,
+                        'preview': file.read_text()[:150] if file.stat().st_size > 0 else ""
+                    })
+                except:
+                    pass
+                    
+        # Sort by modified time (newest first)
+        notes.sort(key=lambda n: n['modified'], reverse=True)
+        
         if not notes:
             empty = Adw.StatusPage()
             empty.set_icon_name("accessories-text-editor-symbolic")
             empty.set_title("Sin notas")
-            empty.set_description("Crea tu primera nota con el botón +")
+            empty.set_description(f"Crea notas en\n{OBSIDIAN_NOTES_PATH}")
             self.notes_flow.append(empty)
             return
             
@@ -224,27 +268,26 @@ class QuickNotes(Gtk.Box):
             self.notes_flow.append(card)
             
     def _create_note_card(self, note: dict) -> Gtk.Button:
-        """Create a clickable note card"""
         btn = Gtk.Button()
         btn.add_css_class("flat")
-        btn.connect("clicked", self._on_note_clicked, note)
+        btn.connect("clicked", self._on_note_clicked, note['path'])
         
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("note-card")
         card.set_size_request(250, 150)
         
         # Title
-        title = Gtk.Label(label=note.get('title', 'Sin título'))
+        title = Gtk.Label(label=note['title'])
         title.add_css_class("title-4")
         title.set_halign(Gtk.Align.START)
         title.set_ellipsize(3)
         card.append(title)
         
-        # Content preview
-        content = note.get('content', '')[:100]
-        if len(note.get('content', '')) > 100:
-            content += "..."
-        content_label = Gtk.Label(label=content)
+        # Preview
+        preview = note['preview'][:100]
+        if len(note['preview']) > 100:
+            preview += "..."
+        content_label = Gtk.Label(label=preview)
         content_label.add_css_class("dim-label")
         content_label.set_halign(Gtk.Align.START)
         content_label.set_valign(Gtk.Align.START)
@@ -255,8 +298,7 @@ class QuickNotes(Gtk.Box):
         btn.set_child(card)
         return btn
         
-    def _on_note_clicked(self, btn, note):
-        """Open note for viewing/editing"""
-        dialog = NoteDetailDialog(note, parent=self.get_root())
+    def _on_note_clicked(self, btn, note_path):
+        dialog = NoteDetailDialog(note_path, parent=self.get_root())
         dialog.connect("note-updated", lambda d: self.refresh())
         dialog.present()

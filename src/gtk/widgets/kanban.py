@@ -1,6 +1,5 @@
 """
-Kanban Board Widget - GTK4 with proper Drag and Drop
-Click opens details, long press + drag moves cards
+Kanban Board Widget - GTK4 with Category Filters
 """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -15,7 +14,7 @@ from src.core.task_manager import task_manager
 
 
 class DraggableTaskCard(Gtk.Box):
-    """A draggable task card for the Kanban board"""
+    """A draggable task card"""
     
     def __init__(self, task: dict, current_status: str, board):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -31,11 +30,10 @@ class DraggableTaskCard(Gtk.Box):
         self.set_margin_top(4)
         self.set_margin_bottom(4)
         
-        # Priority class
         priority = task.get('priority', 'media')
         self.add_css_class(f"priority-{priority}")
         
-        # Make draggable - this handles long press automatically
+        # Drag source
         drag_source = Gtk.DragSource()
         drag_source.set_actions(Gdk.DragAction.MOVE)
         drag_source.connect("prepare", self._on_drag_prepare)
@@ -43,7 +41,7 @@ class DraggableTaskCard(Gtk.Box):
         drag_source.connect("drag-end", self._on_drag_end)
         self.add_controller(drag_source)
         
-        # Click gesture - only fires if drag didn't start
+        # Click
         click = Gtk.GestureClick()
         click.connect("released", self._on_click_released)
         self.add_controller(click)
@@ -51,8 +49,6 @@ class DraggableTaskCard(Gtk.Box):
         self._setup_ui()
         
     def _setup_ui(self):
-        """Setup card UI"""
-        # Title
         title = Gtk.Label(label=self.task.get('title', ''))
         title.set_halign(Gtk.Align.START)
         title.set_wrap(True)
@@ -60,7 +56,6 @@ class DraggableTaskCard(Gtk.Box):
         title.add_css_class("heading")
         self.append(title)
         
-        # Subtitle row
         subtitle_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         
         if self.task.get('category'):
@@ -78,42 +73,28 @@ class DraggableTaskCard(Gtk.Box):
         self.append(subtitle_box)
         
     def _on_drag_prepare(self, source, x, y):
-        """Prepare drag data"""
         self._drag_started = True
-        content = Gdk.ContentProvider.new_for_value(f"{self.task_id}:{self.current_status}")
-        return content
+        return Gdk.ContentProvider.new_for_value(f"{self.task_id}:{self.current_status}")
         
     def _on_drag_begin(self, source, drag):
-        """Visual feedback when drag starts"""
         self.set_opacity(0.5)
         
     def _on_drag_end(self, source, drag, delete_data):
-        """Reset visual after drag"""
         self.set_opacity(1.0)
-        # Reset flag after a short delay
-        GLib.timeout_add(100, self._reset_drag_flag)
-        
-    def _reset_drag_flag(self):
-        self._drag_started = False
-        return False
+        GLib.timeout_add(100, lambda: setattr(self, '_drag_started', False))
         
     def _on_click_released(self, gesture, n_press, x, y):
-        """Open task detail only if drag didn't happen"""
         if self._drag_started:
             return
         if n_press == 1:
             from .task_detail import TaskDetailDialog
             dialog = TaskDetailDialog(self.task, parent=self.get_root())
-            dialog.connect("task-updated", self._on_task_updated)
+            dialog.connect("task-updated", lambda d: self.board.refresh())
             dialog.present()
-            
-    def _on_task_updated(self, dialog):
-        """Refresh when task is updated"""
-        self.board.refresh()
 
 
 class KanbanColumn(Gtk.Box):
-    """A column in the Kanban board that accepts drops"""
+    """A kanban column"""
     
     def __init__(self, status: str, title: str, color: str, board):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -131,12 +112,9 @@ class KanbanColumn(Gtk.Box):
         self._setup_ui(title, color)
         
     def _setup_ui(self, title: str, color: str):
-        """Setup column UI"""
-        # Header
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         header.add_css_class("kanban-column-header")
         
-        # Color indicator
         indicator = Gtk.Box()
         indicator.set_size_request(4, 20)
         css = Gtk.CssProvider()
@@ -151,17 +129,15 @@ class KanbanColumn(Gtk.Box):
         title_label.set_halign(Gtk.Align.START)
         header.append(title_label)
         
-        # Count badge
         self.count_label = Gtk.Label(label="0")
         self.count_label.add_css_class("dim-label")
         header.append(self.count_label)
         
         self.append(header)
         
-        # Task list with hidden scrollbar
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.EXTERNAL)  # Hidden scrollbar
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.EXTERNAL)
         
         self.task_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         scroll.set_child(self.task_list)
@@ -169,60 +145,73 @@ class KanbanColumn(Gtk.Box):
         self.append(scroll)
         
     def _on_drop(self, target, value, x, y):
-        """Handle task drop"""
         try:
             task_id, from_status = value.split(":")
             if from_status != self.status:
                 task_manager.update_task(int(task_id), status=self.status)
                 self.board.refresh()
             return True
-        except Exception as e:
-            print(f"Drop error: {e}")
+        except:
             return False
             
     def _on_drag_enter(self, target, x, y):
-        """Visual feedback on drag enter"""
         self.add_css_class("drag-hover")
         return Gdk.DragAction.MOVE
         
     def _on_drag_leave(self, target):
-        """Remove visual feedback"""
         self.remove_css_class("drag-hover")
         
     def add_task(self, task: dict):
-        """Add a task card to this column"""
         card = DraggableTaskCard(task, self.status, self.board)
         self.task_list.append(card)
         
     def clear_tasks(self):
-        """Clear all tasks"""
-        while True:
-            child = self.task_list.get_first_child()
-            if child:
-                self.task_list.remove(child)
-            else:
-                break
+        while child := self.task_list.get_first_child():
+            self.task_list.remove(child)
                 
     def update_count(self, count: int):
-        """Update task count"""
         self.count_label.set_text(str(count))
 
 
 class KanbanBoard(Gtk.Box):
-    """Kanban board with drag and drop columns"""
+    """Kanban board with category filters"""
     
     def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.set_margin_top(20)
         self.set_margin_bottom(20)
         self.set_margin_start(24)
         self.set_margin_end(24)
         
+        self.current_filter = "Todas"
         self._setup_ui()
         self.refresh()
         
     def _setup_ui(self):
-        """Setup kanban columns"""
+        # Filter bar
+        filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        
+        filter_label = Gtk.Label(label="Filtrar:")
+        filter_bar.append(filter_label)
+        
+        # Category filter buttons
+        categories = ["Todas", "Universidad", "Personal", "Fedora", "Trabajo"]
+        
+        for cat in categories:
+            btn = Gtk.ToggleButton(label=cat)
+            btn.add_css_class("flat")
+            if cat == "Todas":
+                btn.set_active(True)
+            btn.connect("toggled", self._on_filter_changed, cat)
+            filter_bar.append(btn)
+            
+        self.filter_buttons = filter_bar
+        self.append(filter_bar)
+        
+        # Columns container
+        self.columns_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        self.columns_box.set_vexpand(True)
+        
         columns_config = [
             ("pendiente", "Pendiente", "#4285f4"),
             ("en progreso", "En Progreso", "#fbbc05"),
@@ -235,17 +224,32 @@ class KanbanBoard(Gtk.Box):
             column = KanbanColumn(status, title, color, self)
             column.set_hexpand(True)
             self.columns[status] = column
-            self.append(column)
+            self.columns_box.append(column)
+            
+        self.append(self.columns_box)
+        
+    def _on_filter_changed(self, btn, category):
+        if btn.get_active():
+            self.current_filter = category
+            # Deactivate other buttons
+            for child in self.filter_buttons:
+                if isinstance(child, Gtk.ToggleButton) and child != btn:
+                    child.set_active(False)
+            self.refresh()
+        elif self.current_filter == category:
+            btn.set_active(True)  # Prevent deselecting current
             
     def refresh(self):
-        """Refresh all columns"""
         for status, column in self.columns.items():
             column.clear_tasks()
             
             try:
                 tasks = task_manager.get_all_tasks(status=status)
-            except Exception as e:
-                print(f"Error loading tasks: {e}")
+                
+                # Apply category filter
+                if self.current_filter != "Todas":
+                    tasks = [t for t in tasks if t.get('category') == self.current_filter]
+            except:
                 tasks = []
                 
             column.update_count(len(tasks))

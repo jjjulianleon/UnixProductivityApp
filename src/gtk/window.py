@@ -79,7 +79,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.stack.add_titled(self.pomodoro_view, "pomodoro", "Pomodoro")
         
         self.notes_view = QuickNotes()
-        self.stack.add_titled(self.notes_view, "notes", "Notas")
+        self.stack.add_titled(self.notes_view, "notes", "Rough Notes")
         
         self.schedule_view = WeeklySchedule()
         self.stack.add_titled(self.schedule_view, "schedule", "Horario")
@@ -127,7 +127,7 @@ class MainWindow(Adw.ApplicationWindow):
             ("calendar", "Calendario", "month-symbolic"),
             ("schedule", "Horario", "x-office-calendar-symbolic"),
             ("pomodoro", "Pomodoro", "alarm-symbolic"),
-            ("notes", "Notas", "accessories-text-editor-symbolic"),
+            ("notes", "Rough Notes", "accessories-text-editor-symbolic"),
             ("stats", "Estadísticas", "utilities-system-monitor-symbolic"),
         ]
         
@@ -242,7 +242,7 @@ class MainWindow(Adw.ApplicationWindow):
                 "calendar": "Calendario", 
                 "schedule": "Horario Semanal",
                 "pomodoro": "Pomodoro Timer",
-                "notes": "Notas Rápidas",
+                "notes": "Rough Notes",
                 "stats": "Estadísticas"
             }
             self.header_title.set_text(titles.get(key, key))
