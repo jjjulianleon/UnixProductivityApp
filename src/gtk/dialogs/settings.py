@@ -154,6 +154,27 @@ class SettingsDialog(Adw.PreferencesWindow):
         d2l_group.add(self.d2l_url)
         
         sync_page.add(d2l_group)
+        
+        # Teams group
+        teams_group = Adw.PreferencesGroup()
+        teams_group.set_title("Microsoft Teams / Outlook")
+        
+        self.teams_url = Adw.EntryRow()
+        self.teams_url.set_title("URL del calendario ICS")
+        teams_group.add(self.teams_url)
+        
+        sync_page.add(teams_group)
+        
+        # Save button group
+        save_group = Adw.PreferencesGroup()
+        
+        save_sync_btn = Gtk.Button(label="Guardar configuración")
+        save_sync_btn.add_css_class("suggested-action")
+        save_sync_btn.set_margin_top(12)
+        save_sync_btn.connect("clicked", self._on_save_sync)
+        save_group.add(save_sync_btn)
+        
+        sync_page.add(save_group)
         self.add(sync_page)
         
         # About page
@@ -242,6 +263,41 @@ class SettingsDialog(Adw.PreferencesWindow):
             btn.set_label("Guardado ✓")
         except Exception as e:
             print(f"Error saving: {e}")
+    
+    def _on_save_sync(self, btn):
+        """Save sync configuration"""
+        import json
+        from pathlib import Path
+        
+        config_dir = Path.home() / ".config" / "calendar_widget"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save iCloud config
+        icloud_config = {
+            "enabled": self.icloud_enabled.get_active(),
+            "apple_id": self.icloud_user.get_text(),
+            "app_password": self.icloud_pass.get_text()
+        }
+        with open(config_dir / "icloud_config.json", 'w') as f:
+            json.dump(icloud_config, f, indent=2)
+            
+        # Save ICS config
+        ics_config = {
+            "brightspace": {
+                "enabled": True,
+                "source": "url",
+                "url": self.d2l_url.get_text()
+            },
+            "teams": {
+                "enabled": True,
+                "source": "url", 
+                "url": self.teams_url.get_text()
+            }
+        }
+        with open(config_dir / "ics_config.json", 'w') as f:
+            json.dump(ics_config, f, indent=2)
+            
+        btn.set_label("✓ Guardado")
         
     def _load_settings(self):
         try:
@@ -257,5 +313,40 @@ class SettingsDialog(Adw.PreferencesWindow):
             # Load font
             font_idx = settings.get('app_font', 0)
             self.font_row.set_selected(font_idx)
+            
+            # Load sync config
+            self._load_sync_config()
         except Exception as e:
             print(f"Error loading settings: {e}")
+            
+    def _load_sync_config(self):
+        """Load sync configuration from files"""
+        import json
+        from pathlib import Path
+        
+        config_dir = Path.home() / ".config" / "calendar_widget"
+        
+        # Load iCloud
+        icloud_file = config_dir / "icloud_config.json"
+        if icloud_file.exists():
+            try:
+                with open(icloud_file) as f:
+                    config = json.load(f)
+                    self.icloud_enabled.set_active(config.get("enabled", False))
+                    self.icloud_user.set_text(config.get("apple_id", ""))
+                    self.icloud_pass.set_text(config.get("app_password", ""))
+            except:
+                pass
+                
+        # Load ICS
+        ics_file = config_dir / "ics_config.json"
+        if ics_file.exists():
+            try:
+                with open(ics_file) as f:
+                    config = json.load(f)
+                    bs = config.get("brightspace", {})
+                    self.d2l_url.set_text(bs.get("url", ""))
+                    teams = config.get("teams", {})
+                    self.teams_url.set_text(teams.get("url", ""))
+            except:
+                pass
