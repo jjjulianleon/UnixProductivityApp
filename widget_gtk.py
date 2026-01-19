@@ -622,30 +622,64 @@ class WidgetWindow(Adw.ApplicationWindow):
         dialog.add_response("save", "Guardar")
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
         
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_margin_top(12)
         box.set_margin_bottom(12)
         box.set_margin_start(12)
         box.set_margin_end(12)
         
-        entry = Gtk.Entry()
-        entry.set_placeholder_text("Título de la nota...")
-        box.append(entry)
+        # Title entry with Adw style
+        title_group = Adw.PreferencesGroup()
+        entry = Adw.EntryRow()
+        entry.set_title("Título")
+        title_group.add(entry)
+        box.append(title_group)
+        
+        # Description label
+        desc_label = Gtk.Label(label="Descripción")
+        desc_label.set_halign(Gtk.Align.START)
+        desc_label.add_css_class("heading")
+        box.append(desc_label)
+        
+        # Styled text view
+        text_frame = Gtk.Frame()
+        text_frame.add_css_class("card")
         
         text_view = Gtk.TextView()
         text_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        text_view.set_size_request(-1, 80)
+        text_view.set_size_request(280, 100)
+        text_view.set_top_margin(8)
+        text_view.set_bottom_margin(8)
+        text_view.set_left_margin(8)
+        text_view.set_right_margin(8)
+        
+        # Placeholder
+        buffer = text_view.get_buffer()
+        buffer.set_text("Escribe tu nota aquí...")
+        
+        # Clear placeholder on focus
+        def on_focus_in(controller):
+            if buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True) == "Escribe tu nota aquí...":
+                buffer.set_text("")
+                
+        focus_controller = Gtk.EventControllerFocus()
+        focus_controller.connect("enter", on_focus_in)
+        text_view.add_controller(focus_controller)
+        
         scroll = Gtk.ScrolledWindow()
         scroll.set_child(text_view)
-        box.append(scroll)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        text_frame.set_child(scroll)
+        box.append(text_frame)
         
         dialog.set_extra_child(box)
         
         def on_response(d, response):
             if response == "save":
                 title = entry.get_text()
-                buffer = text_view.get_buffer()
                 content = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
+                if content == "Escribe tu nota aquí...":
+                    content = ""
                 if title:
                     try:
                         task_manager.add_quick_note(title, content)
