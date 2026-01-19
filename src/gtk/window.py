@@ -184,8 +184,7 @@ class MainWindow(Adw.ApplicationWindow):
         settings_btn.connect("clicked", self._on_settings_clicked)
         sidebar.append(settings_btn)
         
-        # Set initial selection
-        self.nav_buttons["dashboard"].set_active(True)
+        # Initial selection already set above with suggested-action class
         
         return sidebar
         
