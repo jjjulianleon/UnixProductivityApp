@@ -176,22 +176,23 @@ class ICSParser:
             dt_end = component.get('dtend')
             target_dt = dt_end.dt if dt_end else dt_start
             
-            # Convert to local timezone if it's a datetime object
+            # Convert to local timezone and extract the date for deadline display
             if isinstance(target_dt, datetime):
-                # For DEADLINE purposes, we want the DATE the university set,
-                # NOT the local time conversion (which can shift to previous day)
-                # If the event is in UTC, the university meant that DATE.
-                
+                # Convert to local timezone first
                 if target_dt.tzinfo is not None:
-                    # Keep the DATE as-is from UTC (don't shift to previous day)
-                    # This is correct for deadline dates like "Due Jan 26" 
-                    # which should show as Jan 26 regardless of timezone
-                    deadline_str = target_dt.strftime('%Y-%m-%d')  # Use UTC date directly
+                    local_dt = target_dt.astimezone()
                 else:
-                    # Naive datetime - use as-is
-                    deadline_str = target_dt.strftime('%Y-%m-%d')
+                    local_dt = target_dt
+                    
+                # Handle midnight edge case: 00:00 of day X means deadline was day X-1 at 23:59
+                # This is common in ICS where "due by Sunday" is encoded as Monday 00:00
+                if local_dt.hour == 0 and local_dt.minute == 0:
+                    # Subtract 1 minute to get the actual deadline day
+                    local_dt = local_dt - timedelta(minutes=1)
+                    
+                deadline_str = local_dt.strftime('%Y-%m-%d')
             else:
-                # It's already a date object (all-day event)
+                # It's a date object (all-day event)
                 deadline_str = target_dt.strftime('%Y-%m-%d')
             start_dt = self._normalize_datetime(dtstart.dt)
             end_dt = self._normalize_datetime(dt_end.dt) if dt_end else start_dt

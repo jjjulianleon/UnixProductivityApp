@@ -61,6 +61,27 @@ class SettingsDialog(Adw.PreferencesWindow):
         translucency_group.add(self.opacity_row)
         appearance_page.add(translucency_group)
         
+        # Font group
+        font_group = Adw.PreferencesGroup()
+        font_group.set_title("Fuente")
+        font_group.set_description("Selecciona la fuente de la aplicación")
+        
+        self.font_row = Adw.ComboRow()
+        self.font_row.set_title("Familia de fuente")
+        fonts = Gtk.StringList.new([
+            "Sistema (predeterminado)",
+            "Source Code Pro",
+            "Inter",
+            "Roboto",
+            "Ubuntu",
+            "Fira Code"
+        ])
+        self.font_row.set_model(fonts)
+        self.font_row.connect("notify::selected", self._on_font_changed)
+        font_group.add(self.font_row)
+        
+        appearance_page.add(font_group)
+        
         self.add(appearance_page)
         
         # Pomodoro page
@@ -183,6 +204,35 @@ class SettingsDialog(Adw.PreferencesWindow):
         # Show confirmation
         self.opacity_row.set_subtitle(f"{value}% ✓")
         
+    def _on_font_changed(self, row, param):
+        """Apply selected font"""
+        fonts = [
+            "",  # System default
+            "'Source Code Pro'",
+            "'Inter'",
+            "'Roboto'",
+            "'Ubuntu'",
+            "'Fira Code'"
+        ]
+        selected = row.get_selected()
+        font_family = fonts[selected] if selected < len(fonts) else ""
+        
+        # Save to database
+        try:
+            task_manager.set_setting('app_font', selected)
+        except:
+            pass
+            
+        # Apply font via CSS
+        if font_family:
+            css = Gtk.CssProvider()
+            css.load_from_data(f"* {{ font-family: {font_family}, sans-serif; }}".encode())
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(),
+                css,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+        
     def _on_save_pomodoro(self, btn):
         """Save pomodoro settings"""
         try:
@@ -203,5 +253,9 @@ class SettingsDialog(Adw.PreferencesWindow):
             opacity = settings.get('window_opacity', 88)
             self.opacity_scale.set_value(opacity)
             self.opacity_row.set_subtitle(f"{opacity}%")
+            
+            # Load font
+            font_idx = settings.get('app_font', 0)
+            self.font_row.set_selected(font_idx)
         except Exception as e:
             print(f"Error loading settings: {e}")
