@@ -223,12 +223,15 @@ class ICSParser:
             return None
             
     def _normalize_datetime(self, dt) -> Optional[datetime]:
-        """Normalize datetime to Python datetime object"""
+        """Normalize datetime to Python datetime object in local time"""
         if dt is None:
             return None
         if isinstance(dt, datetime):
-            # Remove timezone info for simplicity
-            return dt.replace(tzinfo=None) if dt.tzinfo else dt
+            # Convert to local time if timezone aware
+            if dt.tzinfo:
+                dt = dt.astimezone()
+            # Return naive datetime in local timzone
+            return dt.replace(tzinfo=None)
         # Handle date-only (all-day events)
         if hasattr(dt, 'year'):
             return datetime(dt.year, dt.month, dt.day)
