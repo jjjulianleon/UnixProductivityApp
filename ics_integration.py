@@ -211,6 +211,7 @@ class ICSParser:
                 'title': summary.strip(),
                 'start': start_dt.isoformat() if start_dt else None,
                 'end': end_dt.isoformat() if end_dt else None,
+                'deadline': local_dt.isoformat() if isinstance(target_dt, datetime) else target_dt.isoformat() if target_dt else None,
                 'description': description[:500],  # Limit description length
                 'location': location,
                 'url': str(component.get('URL', '') or ''),
@@ -293,7 +294,7 @@ class BrightspaceIntegration:
             deadlines.append({
                 'uid': event['uid'],
                 'title': title,
-                'due_date': event['start'],
+                'due_date': event.get('deadline') or event['start'],
                 'course_code': course_code,
                 'course_name': course_info.get('name', ''),
                 'tag': course_info.get('tag', course_code),
