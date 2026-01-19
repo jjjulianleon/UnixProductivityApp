@@ -105,10 +105,10 @@ class TaskDetailDialog(Adw.Window):
         cat_group = Adw.PreferencesGroup()
         self.category_row = Adw.ComboRow()
         self.category_row.set_title("Categoría")
-        categories = Gtk.StringList.new(["Universidad", "Trabajo", "Personal", "Otro"])
+        categories = Gtk.StringList.new(["Universidad", "Trabajo", "Personal", "Fedora"])
         self.category_row.set_model(categories)
-        cat_list = ["Universidad", "Trabajo", "Personal", "Otro"]
-        current_cat = self.task.get('category', 'Otro')
+        cat_list = ["Universidad", "Trabajo", "Personal", "Fedora"]
+        current_cat = self.task.get('category', 'Fedora')
         self.category_row.set_selected(cat_list.index(current_cat) if current_cat in cat_list else 3)
         cat_group.add(self.category_row)
         content.append(cat_group)
@@ -214,7 +214,7 @@ class TaskDetailDialog(Adw.Window):
         """Save task changes"""
         statuses = ["pendiente", "en progreso", "completado"]
         priorities = ["alta", "media", "baja"]
-        categories = ["Universidad", "Trabajo", "Personal", "Otro"]
+        categories = ["Universidad", "Trabajo", "Personal", "Fedora"]
         
         buffer = self.desc_view.get_buffer()
         start, end = buffer.get_bounds()

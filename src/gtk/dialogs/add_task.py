@@ -66,7 +66,7 @@ class AddTaskDialog(Adw.Window):
         category_group = Adw.PreferencesGroup()
         self.category_row = Adw.ComboRow()
         self.category_row.set_title("Categoría")
-        categories = Gtk.StringList.new(["Universidad", "Trabajo", "Personal", "Otro"])
+        categories = Gtk.StringList.new(["Universidad", "Trabajo", "Personal", "Fedora"])
         self.category_row.set_model(categories)
         category_group.add(self.category_row)
         content.append(category_group)
@@ -157,7 +157,7 @@ class AddTaskDialog(Adw.Window):
             self.title_entry.add_css_class("error")
             return
             
-        categories = ["Universidad", "Trabajo", "Personal", "Otro"]
+        categories = ["Universidad", "Trabajo", "Personal", "Fedora"]
         priorities = ["alta", "media", "baja"]
         
         category = categories[self.category_row.get_selected()]
