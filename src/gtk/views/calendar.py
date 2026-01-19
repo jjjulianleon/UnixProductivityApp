@@ -239,7 +239,21 @@ class CalendarView(Gtk.Box):
             
         for task in tasks:
             row = Adw.ActionRow()
-            row.set_title(task.get('title', ''))
+            
+            # Format time if available
+            title = task.get('title', '')
+            deadline_str = task.get('deadline', '')
+            
+            if 'T' in deadline_str:
+                try:
+                    dt = datetime.fromisoformat(deadline_str)
+                    # format: 11:59 PM
+                    time_str = dt.strftime("%I:%M %p").lower()
+                    title = f"[{time_str}] {title}"
+                except ValueError:
+                    pass
+            
+            row.set_title(title)
             row.set_subtitle(task.get('category', ''))
             row.set_activatable(True)
             row.connect("activated", self._on_task_clicked, task)
