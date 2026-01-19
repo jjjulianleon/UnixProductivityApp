@@ -319,7 +319,8 @@ class ICloudSync:
                     skipped += 1
                     continue
                 
-                end_dt = due_dt + timedelta(hours=1)
+                # Use same start/end time for deadlines (point-in-time, not a span)
+                end_dt = due_dt  # No +1 hour, deadline is a moment not a duration
                 location = f"D2L - {course}" if course else "D2L Brightspace"
                 
                 if self.add_event(full_title, due_dt, end_dt, location):
