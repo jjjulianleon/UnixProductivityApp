@@ -143,13 +143,13 @@ class WidgetWindow(Adw.ApplicationWindow):
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         
         # Calendar tab
-        self.stack.add_titled(self._create_calendar_view(), "calendar", "📅")
+        self.stack.add_titled(self._create_calendar_view(), "calendar", "Calendario")
         
         # Tasks tab
-        self.stack.add_titled(self._create_tasks_view(), "tasks", "✓")
+        self.stack.add_titled(self._create_tasks_view(), "tasks", "Tareas")
         
         # Schedule tab
-        self.stack.add_titled(self._create_schedule_view(), "schedule", "📋")
+        self.stack.add_titled(self._create_schedule_view(), "schedule", "Horario")
         
         # Tab switcher
         switcher = Gtk.StackSwitcher()
@@ -233,13 +233,16 @@ class WidgetWindow(Adw.ApplicationWindow):
             lbl.add_css_class("caption")
             self.calendar_grid.attach(lbl, col, 0, 1, 1)
             
-        # Get deadlines
-        deadlines = {}
+        # Get deadlines - store tasks by date
+        self.deadlines = {}
         try:
             tasks = task_manager.get_tasks_with_deadlines()
             for t in tasks:
                 if t.get('deadline') and t.get('status') != 'completado':
-                    deadlines[t['deadline']] = True
+                    date_str = t['deadline']
+                    if date_str not in self.deadlines:
+                        self.deadlines[date_str] = []
+                    self.deadlines[date_str].append(t)
         except:
             pass
             
@@ -259,7 +262,11 @@ class WidgetWindow(Adw.ApplicationWindow):
                                 self.current_month.year == today.year)
                     
                     date_str = f"{self.current_month.year}-{self.current_month.month:02d}-{day:02d}"
-                    has_deadline = date_str in deadlines
+                    has_deadline = date_str in self.deadlines
+                    
+                    # Use button for clickable days
+                    day_btn = Gtk.Button()
+                    day_btn.add_css_class("flat")
                     
                     day_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
                     day_box.set_halign(Gtk.Align.CENTER)
@@ -275,8 +282,53 @@ class WidgetWindow(Adw.ApplicationWindow):
                         dot = Gtk.Label(label="●")
                         dot.add_css_class("deadline-dot")
                         day_box.append(dot)
-                        
-                    self.calendar_grid.attach(day_box, col_idx, row_idx + 1, 1, 1)
+                        day_btn.connect("clicked", self._on_date_clicked, date_str)
+                        day_btn.set_tooltip_text(f"{len(self.deadlines[date_str])} tarea(s)")
+                    
+                    day_btn.set_child(day_box)
+                    self.calendar_grid.attach(day_btn, col_idx, row_idx + 1, 1, 1)
+    
+    def _on_date_clicked(self, btn, date_str):
+        """Show tasks for clicked date"""
+        tasks = self.deadlines.get(date_str, [])
+        if not tasks:
+            return
+            
+        # Create popover with tasks
+        popover = Gtk.Popover()
+        popover.set_parent(btn)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        
+        header = Gtk.Label(label=f"Tareas para {date_str}")
+        header.add_css_class("heading")
+        box.append(header)
+        
+        for task in tasks:
+            task_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            
+            priority = task.get('priority', 'media')
+            colors = {'alta': '#ea4335', 'media': '#fbbc05', 'baja': '#34a853'}
+            color = colors.get(priority, '#fbbc05')
+            
+            dot = Gtk.Label(label="●")
+            css = Gtk.CssProvider()
+            css.load_from_data(f"label {{ color: {color}; }}".encode())
+            dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            task_row.append(dot)
+            
+            title = Gtk.Label(label=task.get('title', '')[:35])
+            title.set_halign(Gtk.Align.START)
+            task_row.append(title)
+            
+            box.append(task_row)
+            
+        popover.set_child(box)
+        popover.popup()
         
     def _create_tasks_view(self) -> Gtk.Box:
         """Create compact tasks view"""
