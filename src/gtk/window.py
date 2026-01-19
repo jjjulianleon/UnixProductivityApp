@@ -201,7 +201,8 @@ class MainWindow(Adw.ApplicationWindow):
         # Add task button
         add_btn = Gtk.Button()
         add_btn.set_icon_name("list-add-symbolic")
-        add_btn.add_css_class("accent-button")
+        add_btn.add_css_class("suggested-action")
+        add_btn.add_css_class("circular")
         add_btn.set_tooltip_text("Nueva Tarea (Ctrl+N)")
         add_btn.connect("clicked", lambda _: self.show_add_task_dialog())
         header.pack_start(add_btn)
