@@ -125,7 +125,7 @@ class MainWindow(Adw.ApplicationWindow):
             ("tasks", "Tareas", "checkbox-checked-symbolic"),
             ("kanban", "Kanban", "view-column-symbolic"),
             ("calendar", "Calendario", "x-office-calendar-symbolic"),
-            ("schedule", "Horario", "go-today"),
+            ("schedule", "Horario", "x-office-calendar-symbolic"),
             ("pomodoro", "Pomodoro", "alarm-symbolic"),
             ("notes", "Rough Notes", "accessories-text-editor-symbolic"),
             ("stats", "Estadísticas", "utilities-system-monitor-symbolic"),
