@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 
 from .database import db
 from .obsidian_sync import ObsidianSync
-from .database import db
-from .obsidian_sync import ObsidianSync
 from .signals import signals
 
 # Try to import ICS integration
@@ -467,10 +465,11 @@ class TaskManager:
         return db.get_daily_stats(date)
     
     # Schedule
-    def add_schedule_event(self, title: str, day_of_week: int, start_time: str, 
-                          end_time: str, color: str = "66, 133, 244") -> int:
+    def add_schedule_event(self, title: str, day_of_week: int, start_time: str,
+                          end_time: str, color: str = "66, 133, 244",
+                          recurring: int = 1, event_date: str = None) -> int:
         """Add a schedule event"""
-        event_id = db.add_schedule_event(title, day_of_week, start_time, end_time, color)
+        event_id = db.add_schedule_event(title, day_of_week, start_time, end_time, color, recurring, event_date)
         signals.schedule_updated.emit()
         return event_id
     

@@ -571,7 +571,7 @@ class ScheduleEventDialog(QDialog):
             source_layout.addWidget(source_lbl)
             
             self.source_combo = QComboBox()
-            self.source_combo.addItems(["Local (Semanal Recurrente)", "iCloud (Fecha Unica)"])
+            self.source_combo.addItems(["Local (Semanal Recurrente)", "Local (Fecha Unica)", "iCloud (Fecha Unica)"])
             self.source_combo.setFont(QFont(FONT_FAMILY, 10))
             self.source_combo.setStyleSheet(get_combobox_style())
             self.source_combo.currentIndexChanged.connect(self._toggle_source)
@@ -690,35 +690,51 @@ class ScheduleEventDialog(QDialog):
         layout.addLayout(buttons_layout)
     
     def _toggle_source(self):
-        is_icloud = self.source_combo.currentIndex() == 1
-        self.day_label.setText("Fecha" if is_icloud else "Dia de la semana")
-        self.day_combo.setVisible(not is_icloud)
-        self.date_edit.setVisible(is_icloud)
+        # 0 = Local recurring, 1 = Local one-time, 2 = iCloud
+        source_index = self.source_combo.currentIndex()
+        is_one_time = source_index in (1, 2)
+        self.day_label.setText("Fecha" if is_one_time else "Dia de la semana")
+        self.day_combo.setVisible(not is_one_time)
+        self.date_edit.setVisible(is_one_time)
         
     def _save(self):
         title = self.title_input.text().strip()
         if not title:
             return
-        
+
         event_data = {
             'title': title,
             'start_time': self.start_time.currentText(),
             'end_time': self.end_time.currentText(),
             'color': COLORS['primary']
         }
-        
-        if not self.is_edit and self.source_combo.currentIndex() == 1:
-            # iCloud Event
-            event_data['target'] = 'icloud'
-            event_data['date'] = self.date_edit.date().toString("yyyy-MM-dd")
+
+        if not self.is_edit:
+            source_index = self.source_combo.currentIndex()
+            if source_index == 2:
+                # iCloud Event
+                event_data['target'] = 'icloud'
+                event_data['date'] = self.date_edit.date().toString("yyyy-MM-dd")
+            elif source_index == 1:
+                # Local one-time event
+                event_data['target'] = 'local'
+                selected_date = self.date_edit.date()
+                event_data['day_of_week'] = selected_date.dayOfWeek() - 1  # Qt: 1=Mon, we need 0=Mon
+                event_data['event_date'] = selected_date.toString("yyyy-MM-dd")
+                event_data['recurring'] = 0
+            else:
+                # Local recurring event
+                event_data['target'] = 'local'
+                event_data['day_of_week'] = self.day_combo.currentIndex()
+                event_data['recurring'] = 1
         else:
-            # Local Event
+            # Editing existing event
             event_data['target'] = 'local'
             event_data['day_of_week'] = self.day_combo.currentIndex()
-        
+
         if self.event:
             event_data['id'] = self.event.get('id')
-        
+
         self.event_saved.emit(event_data)
         self.accept()
     

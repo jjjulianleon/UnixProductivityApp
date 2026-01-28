@@ -20,14 +20,15 @@ from src.gtk.window import MainWindow
 
 class UnixProductivityApp(Adw.Application):
     """Main GTK4 Application"""
-    
+
     def __init__(self):
         super().__init__(
             application_id="com.github.jjjulianleon.unixproductivity",
             flags=Gio.ApplicationFlags.FLAGS_NONE
         )
         self.window = None
-        
+        self.auto_sync = None
+
     def do_startup(self):
         """Load CSS and setup application"""
         Adw.Application.do_startup(self)
@@ -93,7 +94,42 @@ class UnixProductivityApp(Adw.Application):
         """Create and show main window"""
         if not self.window:
             self.window = MainWindow(application=self)
+
+        # Start auto-sync for Brightspace/Teams
+        self._start_auto_sync()
+
         self.window.present()
+
+    def _start_auto_sync(self):
+        """Start automatic calendar synchronization"""
+        try:
+            from src.core.auto_sync import auto_sync
+
+            self.auto_sync = auto_sync
+
+            # Add callback to refresh views after sync
+            def on_sync_complete(result):
+                # Schedule UI update on main thread
+                GLib.idle_add(self._on_sync_complete, result)
+
+            self.auto_sync.add_callback(on_sync_complete)
+            self.auto_sync.start_background_sync()
+            print("Auto-sync started for Brightspace D2L")
+        except Exception as e:
+            print(f"Auto-sync init error: {e}")
+
+    def _on_sync_complete(self, result):
+        """Handle sync completion - refresh UI"""
+        try:
+            if self.window:
+                self.window.refresh_views()
+
+            imported = result.get('brightspace', {}).get('imported', 0)
+            if imported > 0:
+                print(f"Synced {imported} new deadlines from Brightspace")
+        except Exception as e:
+            print(f"Sync UI update error: {e}")
+        return False  # Don't repeat
         
     def _on_new_task(self, action, param):
         """Handle new task action"""

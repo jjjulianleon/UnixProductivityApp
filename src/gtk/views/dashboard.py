@@ -31,21 +31,45 @@ class DashboardView(Gtk.Box):
         
     def _setup_ui(self):
         """Setup dashboard UI"""
-        # Welcome section
+        # Welcome section with sync button
+        welcome_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        welcome_row.set_spacing(12)
+
         welcome_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        
+        welcome_box.set_hexpand(True)
+
         greeting = self._get_greeting()
         greeting_label = Gtk.Label(label=greeting)
         greeting_label.add_css_class("title-1")
         greeting_label.set_halign(Gtk.Align.START)
         welcome_box.append(greeting_label)
-        
+
         date_label = Gtk.Label(label=datetime.now().strftime("%A, %d de %B %Y"))
         date_label.add_css_class("dim-label")
         date_label.set_halign(Gtk.Align.START)
         welcome_box.append(date_label)
-        
-        self.append(welcome_box)
+
+        welcome_row.append(welcome_box)
+
+        # Sync button
+        sync_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        sync_box.set_valign(Gtk.Align.CENTER)
+
+        self.sync_btn = Gtk.Button()
+        self.sync_btn.set_icon_name("emblem-synchronizing-symbolic")
+        self.sync_btn.add_css_class("circular")
+        self.sync_btn.set_tooltip_text("Sincronizar Brightspace D2L")
+        self.sync_btn.connect("clicked", self._on_sync_clicked)
+        sync_box.append(self.sync_btn)
+
+        self.sync_status = Gtk.Label(label="")
+        self.sync_status.add_css_class("caption")
+        self.sync_status.add_css_class("dim-label")
+        sync_box.append(self.sync_status)
+
+        welcome_row.append(sync_box)
+
+        self.append(welcome_row)
         
         # Stats row
         stats_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
@@ -293,3 +317,47 @@ class DashboardView(Gtk.Box):
             row.set_title(event.get('title', ''))
             row.set_subtitle(f"{event.get('start_time', '')} - {event.get('end_time', '')}")
             self.schedule_list.append(row)
+
+    def _on_sync_clicked(self, button):
+        """Manually trigger sync with Brightspace D2L"""
+        button.set_sensitive(False)
+        self.sync_status.set_text("Sincronizando...")
+
+        def do_sync():
+            try:
+                from src.core.auto_sync import auto_sync
+                result = auto_sync.sync_now()
+
+                imported = result.get('brightspace', {}).get('imported', 0)
+                skipped = result.get('brightspace', {}).get('skipped', 0)
+                errors = result.get('brightspace', {}).get('errors', [])
+
+                # Update UI on main thread
+                def update_ui():
+                    button.set_sensitive(True)
+                    if errors:
+                        self.sync_status.set_text(f"Error: {errors[0][:30]}")
+                    elif imported > 0:
+                        self.sync_status.set_text(f"+{imported} nuevas tareas")
+                        self.refresh()
+                    else:
+                        self.sync_status.set_text(f"Sin cambios ({skipped} existentes)")
+
+                    # Clear status after 5 seconds
+                    GLib.timeout_add_seconds(5, lambda: self.sync_status.set_text(""))
+                    return False
+
+                GLib.idle_add(update_ui)
+
+            except Exception as e:
+                def show_error():
+                    button.set_sensitive(True)
+                    self.sync_status.set_text(f"Error: {str(e)[:25]}")
+                    return False
+
+                GLib.idle_add(show_error)
+
+        # Run sync in background thread
+        import threading
+        thread = threading.Thread(target=do_sync, daemon=True)
+        thread.start()

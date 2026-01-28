@@ -106,6 +106,7 @@ class Database:
                 end_time TEXT NOT NULL,
                 color TEXT DEFAULT '66, 133, 244',
                 recurring INTEGER DEFAULT 1,
+                event_date TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -138,12 +139,19 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute("PRAGMA table_info(tasks)")
         columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'position' not in columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN position INTEGER DEFAULT 0")
         if 'tags' not in columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN tags TEXT DEFAULT '[]'")
-        
+
+        # Migration for schedule_events table
+        cursor.execute("PRAGMA table_info(schedule_events)")
+        schedule_columns = [col[1] for col in cursor.fetchall()]
+
+        if 'event_date' not in schedule_columns:
+            cursor.execute("ALTER TABLE schedule_events ADD COLUMN event_date TEXT")
+
         self.conn.commit()
     
     def add_task(self, title: str, category: str, description: str = "",
@@ -450,12 +458,13 @@ class Database:
                 settings[row['key']] = row['value']
         return settings
     
-    def add_schedule_event(self, title: str, day_of_week: int, start_time: str, 
-                          end_time: str, color: str = "66, 133, 244") -> int:
+    def add_schedule_event(self, title: str, day_of_week: int, start_time: str,
+                          end_time: str, color: str = "66, 133, 244",
+                          recurring: int = 1, event_date: Optional[str] = None) -> int:
         cursor = self.conn.cursor()
         cursor.execute(
-            "INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color) VALUES (?, ?, ?, ?, ?)",
-            (title, day_of_week, start_time, end_time, color)
+            "INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color, recurring, event_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (title, day_of_week, start_time, end_time, color, recurring, event_date)
         )
         self.conn.commit()
         return cursor.lastrowid

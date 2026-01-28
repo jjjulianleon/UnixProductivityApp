@@ -1,2 +1,23 @@
 __pycache__/
 *.pyc
+
+# Database
+productivity.db
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+*.env.local
+venv/
+.venv/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

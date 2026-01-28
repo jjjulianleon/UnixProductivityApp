@@ -162,12 +162,18 @@ class CalendarView(QWidget):
                     day_of_week=event_data['day_of_week'],
                     start_time=event_data['start_time'],
                     end_time=event_data['end_time'],
-                    color=event_data.get('color', '66, 133, 244')
+                    color=event_data.get('color', '66, 133, 244'),
+                    recurring=event_data.get('recurring', 1),
+                    event_date=event_data.get('event_date')
                 )
         self._refresh_schedule()
     
     def _on_event_clicked(self, event: dict):
         """Handle click on existing schedule event - open edit dialog"""
+        # External events (from Teams/ICS) cannot be edited locally
+        if event.get('is_external'):
+            return
+
         dialog = ScheduleEventDialog(
             day_index=event.get('day_of_week', 0),
             hour=int(event.get('start_time', '09:00').split(':')[0]),

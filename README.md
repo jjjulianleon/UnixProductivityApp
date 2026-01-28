@@ -155,9 +155,10 @@ python widget.py &
 
 ```
 CalendarWidget/
-|-- main_app.py                 # Punto de entrada de la aplicacion principal
+|-- main_app.py                 # Punto de entrada de la aplicacion principal (PyQt6)
+|-- main_gtk.py                 # Punto de entrada GTK4/Libadwaita
 |-- widget.py                   # Punto de entrada del widget de escritorio
-|-- calendar_widget.py          # Widget compacto (version alternativa)
+|-- widget_gtk.py               # Widget de escritorio GTK4
 |-- icloud_integration.py       # Sincronizacion con iCloud Calendar (CalDAV)
 |-- ics_integration.py          # Integracion unificada ICS (Brightspace/Teams)
 |-- teams_integration.py        # Integracion con Microsoft Teams Graph API

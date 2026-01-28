@@ -437,33 +437,47 @@ class WeeklySchedule(QWidget):
     
     def _load_events(self):
         """Load schedule events from database and external sources"""
-        # 1. Load DB events (recurring weekly)
+        # 1. Load DB events
         # Filter by semester dates (Jan 12 - May 16)
         # Check if ANY day of the current week falls within the semester
         week_end_date = self.week_start + timedelta(days=6)
         # Ranges overlap if (StartA <= EndB) and (EndA >= StartB)
         is_in_semester = (self.week_start <= SEMESTER_END) and (week_end_date >= SEMESTER_START)
-        
+
         events = []
         if is_in_semester:
             events = db.get_schedule_events()
-        
+
         # Group by day
         by_day: Dict[int, List] = {i: [] for i in range(7)}
-        
+
         # Check if current week is after internship end date
         is_after_internship = self.week_start > INTERNSHIP_END
-        
+
         for evt in events:
             day = evt.get('day_of_week', 0)
             if 0 <= day < 7:
                 # Filter out internship/work events after Feb 14
                 title_lower = evt.get('title', '').lower()
                 is_internship_event = any(kw in title_lower for kw in ['pasant', 'trabajo', 'intern', 'work', 'pasec'])
-                
+
                 if is_internship_event and is_after_internship:
                     continue  # Skip internship events after the deadline
-                    
+
+                # Check if event is recurring or one-time
+                is_recurring = evt.get('recurring', 1) == 1
+                event_date_str = evt.get('event_date')
+
+                if not is_recurring and event_date_str:
+                    # Non-recurring event: only show during the week of event_date
+                    try:
+                        event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
+                        event_week_start = event_date - timedelta(days=event_date.weekday())
+                        if self.week_start.date() != event_week_start:
+                            continue  # Skip if not in the right week
+                    except ValueError:
+                        continue  # Skip if date is invalid
+
                 evt['is_internal'] = True
                 by_day[day].append(evt)
         

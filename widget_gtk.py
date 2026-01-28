@@ -15,18 +15,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from src.core.task_manager import task_manager
+from src.core.database import db
 
-
-# Fixed schedule data
-FIXED_SCHEDULE = {
-    0: [("13:00", "14:20", "Data Mining"), ("14:30", "15:50", "Redes Lab")],
-    1: [("10:00", "11:20", "Bases de Datos"), ("13:00", "14:20", "Redes"), 
-        ("14:30", "15:50", "Mercados Int."), ("16:00", "18:00", "PASEC")],
-    2: [("13:00", "14:20", "Data Mining"), ("14:30", "15:50", "PASEC Teoría")],
-    3: [("10:00", "11:20", "Bases de Datos"), ("13:00", "14:20", "Redes"), 
-        ("14:30", "15:50", "Mercados Int.")],
-    4: [("14:00", "18:00", "PASEC")],
-}
+# Semester configuration
+SEMESTER_START = datetime(2026, 1, 12)
+SEMESTER_END = datetime(2026, 5, 16)
+INTERNSHIP_END = datetime(2026, 2, 14)
 
 
 class WidgetApp(Adw.Application):
@@ -462,19 +456,49 @@ class WidgetWindow(Adw.ApplicationWindow):
         return box
         
     def _update_next_class(self):
+        """Get next class from database schedule events"""
         now = datetime.now()
-        today_schedule = FIXED_SCHEDULE.get(now.weekday(), [])
-        
+        today = now.date()
+
+        # Get schedule events for today from database
+        today_events = db.get_schedule_events(now.weekday())
+
+        # Filter by semester and internship dates
+        filtered_events = []
+        for evt in today_events:
+            # Check recurring vs one-time
+            is_recurring = evt.get('recurring', 1) == 1
+            event_date_str = evt.get('event_date')
+
+            if not is_recurring and event_date_str:
+                try:
+                    event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
+                    if today != event_date:
+                        continue
+                except ValueError:
+                    continue
+
+            # Filter internship events
+            title_lower = evt.get('title', '').lower()
+            is_internship = any(kw in title_lower for kw in ['pasant', 'trabajo', 'intern', 'work'])
+            if is_internship and datetime.combine(today, datetime.min.time()) > INTERNSHIP_END:
+                continue
+
+            filtered_events.append(evt)
+
+        # Find next upcoming event
         next_class = None
-        for start, end, name in today_schedule:
-            start_h, start_m = map(int, start.split(':'))
+        for evt in sorted(filtered_events, key=lambda e: e.get('start_time', '00:00')):
+            start_time = evt.get('start_time', '09:00')
+            start_h, start_m = map(int, start_time.split(':'))
             class_time = now.replace(hour=start_h, minute=start_m, second=0)
+
             if class_time > now:
                 diff = class_time - now
                 mins = int(diff.total_seconds() // 60)
-                next_class = (name, mins)
+                next_class = (evt.get('title', 'Evento'), mins)
                 break
-                
+
         if next_class:
             self.next_class_label.set_text(next_class[0])
             if next_class[1] < 60:
@@ -732,6 +756,35 @@ class WidgetWindow(Adw.ApplicationWindow):
         GLib.timeout_add_seconds(1, self._update_time)
         GLib.timeout_add_seconds(1, self._pomodoro_tick)
         GLib.timeout_add_seconds(60, self._update_next_class_wrapper)
+        # Auto-refresh data every 30 seconds to sync with main app changes
+        GLib.timeout_add_seconds(30, self._refresh_all_data)
+
+    def _refresh_all_data(self) -> bool:
+        """Refresh all widget data from database"""
+        try:
+            self._update_stats_display()
+            self._update_calendar()
+            self._update_urgent()
+            self._update_progress()
+            self._update_next_class()
+        except Exception as e:
+            print(f"Widget refresh error: {e}")
+        return True
+
+    def _update_stats_display(self):
+        """Update the stats row with fresh data"""
+        stats = self._get_stats()
+        # Find and update the value labels in stat boxes
+        self._update_stat_value(self.pending_label, str(stats['pending']))
+        self._update_stat_value(self.today_label, str(stats['today']))
+        self._update_stat_value(self.overdue_label, str(stats['overdue']))
+        self._update_stat_value(self.completed_label, str(stats['completed_today']))
+
+    def _update_stat_value(self, stat_box, new_value):
+        """Update the value label in a stat box"""
+        child = stat_box.get_first_child()
+        if child and isinstance(child, Gtk.Label):
+            child.set_text(new_value)
         
     def _update_next_class_wrapper(self) -> bool:
         self._update_next_class()
