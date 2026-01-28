@@ -5,12 +5,12 @@ Main entry point with translucent window support
 """
 import sys
 import gi
+from pathlib import Path
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
 from gi.repository import Gtk, Adw, Gio, GLib, Gdk
-from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))

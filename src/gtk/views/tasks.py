@@ -32,6 +32,23 @@ class TasksView(Gtk.Box):
         self.current_status_filter = "all"
         self.current_category_filter = "Todas"
         self._setup_ui()
+        
+        # Connect signals
+        from src.core.signals import signals
+        signals.task_added.connect(self._on_task_added)
+        signals.task_updated.connect(self._on_task_updated)
+        signals.task_deleted.connect(self._on_task_deleted)
+        signals.tasks_reloaded.connect(self.refresh)
+        
+        self.refresh()
+
+    def _on_task_added(self, task):
+        self.refresh()
+
+    def _on_task_updated(self, task_id, task):
+        self.refresh()
+
+    def _on_task_deleted(self, task_id):
         self.refresh()
         
     def _setup_ui(self):
@@ -136,7 +153,30 @@ class TasksView(Gtk.Box):
             # Apply search filter
             search_text = self.search_entry.get_text().lower()
             if search_text:
-                tasks = [t for t in tasks if search_text in t.get('title', '').lower()]
+                filtered_tasks = []
+                for t in tasks:
+                    # Search in title
+                    if search_text in t.get('title', '').lower():
+                        filtered_tasks.append(t)
+                        continue
+                        
+                    # Search in description
+                    if search_text in t.get('description', '').lower():
+                        filtered_tasks.append(t)
+                        continue
+                        
+                    # Search in tags (where course info might be)
+                    tags = t.get('tags', [])
+                    if tags and any(search_text in str(tag).lower() for tag in tags):
+                        filtered_tasks.append(t)
+                        continue
+                        
+                    # Search in category
+                    if search_text in t.get('category', '').lower():
+                        filtered_tasks.append(t)
+                        continue
+                        
+                tasks = filtered_tasks
                 
         except Exception as e:
             print(f"Error loading tasks: {e}")

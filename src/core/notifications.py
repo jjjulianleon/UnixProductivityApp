@@ -1,18 +1,19 @@
 """
 Notification Manager - Desktop notifications and scheduled reminders
+Uses GLib for timers to remain compatible with GTK
 """
 import subprocess
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer, QObject
+from gi.repository import GLib
 
 from .database import db
 from .signals import signals
 
 
-class NotificationManager(QObject):
+class NotificationManager:
     """Handles desktop notifications and scheduled reminders"""
     
     _instance = None
@@ -24,23 +25,18 @@ class NotificationManager(QObject):
         return cls._instance
     
     def __init__(self):
-        super().__init__()
         self.app_name = "UnixProductivityApp"
-        self.check_interval = 60000  # Check every minute
+        self.check_interval_ms = 60000  # Check every minute
+        self.backup_interval_ms = 6 * 60 * 60 * 1000  # 6 hours
         
-        # Timer for checking reminders
-        self.reminder_timer = QTimer()
-        self.reminder_timer.timeout.connect(self._check_reminders)
-        
-        # Timer for auto backup (every 6 hours)
-        self.backup_timer = QTimer()
-        self.backup_timer.timeout.connect(self._auto_backup)
-        self.backup_interval = 6 * 60 * 60 * 1000  # 6 hours
+        self.reminder_timer_id = None
+        self.backup_timer_id = None
     
     def start(self):
         """Start the notification manager timers"""
-        self.reminder_timer.start(self.check_interval)
-        self.backup_timer.start(self.backup_interval)
+        # Start GLib timers
+        self.reminder_timer_id = GLib.timeout_add(self.check_interval_ms, self._check_reminders_timer)
+        self.backup_timer_id = GLib.timeout_add(self.backup_interval_ms, self._auto_backup_timer)
         
         # Check reminders immediately on start
         self._check_reminders()
@@ -50,8 +46,18 @@ class NotificationManager(QObject):
     
     def stop(self):
         """Stop the notification manager timers"""
-        self.reminder_timer.stop()
-        self.backup_timer.stop()
+        if self.reminder_timer_id:
+            GLib.source_remove(self.reminder_timer_id)
+        if self.backup_timer_id:
+            GLib.source_remove(self.backup_timer_id)
+
+    def _check_reminders_timer(self):
+        self._check_reminders()
+        return True # Continue timer
+        
+    def _auto_backup_timer(self):
+        self._auto_backup()
+        return True # Continue timer
     
     def send_notification(self, title: str, message: str, urgency: str = "normal",
                           icon: Optional[str] = None):

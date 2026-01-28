@@ -113,6 +113,18 @@ class TaskDetailDialog(Adw.Window):
         cat_group.add(self.category_row)
         content.append(cat_group)
         
+        # Tags
+        tags_group = Adw.PreferencesGroup()
+        self.tags_entry = Adw.EntryRow()
+        self.tags_entry.set_title("Etiquetas")
+        current_tags = self.task.get('tags', [])
+        # Ensure tags is a list
+        if not isinstance(current_tags, list):
+            current_tags = []
+        self.tags_entry.set_text(", ".join(str(t) for t in current_tags))
+        tags_group.add(self.tags_entry)
+        content.append(tags_group)
+        
         # Deadline
         deadline_group = Adw.PreferencesGroup()
         self.deadline_row = Adw.ActionRow()
@@ -219,6 +231,10 @@ class TaskDetailDialog(Adw.Window):
         buffer = self.desc_view.get_buffer()
         start, end = buffer.get_bounds()
         
+        # Get tags
+        tags_text = self.tags_entry.get_text()
+        tags = [t.strip() for t in tags_text.split(',')] if tags_text else []
+        
         try:
             task_manager.update_task(
                 self.task_id,
@@ -227,7 +243,8 @@ class TaskDetailDialog(Adw.Window):
                 priority=priorities[self.priority_row.get_selected()],
                 category=categories[self.category_row.get_selected()],
                 deadline=self.selected_deadline,
-                description=buffer.get_text(start, end, False)
+                description=buffer.get_text(start, end, False),
+                tags=tags
             )
             self.emit("task-updated")
             self.close()

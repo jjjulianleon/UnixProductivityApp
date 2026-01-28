@@ -155,16 +155,16 @@ class AddEventDialog(Adw.Window):
         selected_color = colors[self.color_row.get_selected()]
         
         try:
-            task_manager.add_schedule_event({
-                'title': title,
-                'day': self.day_row.get_selected(),
-                'start_time': self.start_entry.get_text(),
-                'end_time': self.end_entry.get_text(),
-                'recurring': self.recurring.get_active(),
-                'color': selected_color
-            })
-        except:
-            pass
+            task_manager.add_schedule_event(
+                title=title,
+                day_of_week=self.day_row.get_selected(),
+                start_time=self.start_entry.get_text(),
+                end_time=self.end_entry.get_text(),
+                color=selected_color
+            )
+        except Exception as e:
+            print(f"Error saving event: {e}")
+            
         self.emit("event-added")
         self.close()
 
@@ -330,15 +330,25 @@ class WeeklySchedule(Gtk.Box):
             self._add_day_events(day, day_date)
             
     def _add_day_events(self, day_index, day_date):
-        if not (SEMESTER_START <= day_date <= SEMESTER_END):
-            return
-            
-        events = FIXED_SCHEDULE.get(day_index, [])
-        
-        for event in events:
-            if event.get('internship') and day_date > INTERNSHIP_END:
-                continue
-            self._add_event_widget(day_index, event)
+        # 1. Load from FIXED_SCHEDULE (only during semester)
+        if (SEMESTER_START <= day_date <= SEMESTER_END):
+            events = FIXED_SCHEDULE.get(day_index, [])
+            for event in events:
+                if event.get('internship') and day_date > INTERNSHIP_END:
+                    continue
+                self._add_event_widget(day_index, event)
+                
+        # 2. Load from Database (always)
+        db_events = task_manager.get_schedule_events(day_index)
+        for event in db_events:
+            # Match the format expected by _add_event_widget
+            formatted_event = {
+                'title': event['title'],
+                'start': event['start_time'],
+                'end': event['end_time'],
+                'color': event['color']
+            }
+            self._add_event_widget(day_index, formatted_event)
             
     def _add_event_widget(self, day_index, event):
         start_hour = int(event['start'].split(':')[0])
@@ -360,10 +370,26 @@ class WeeklySchedule(Gtk.Box):
         box.set_halign(Gtk.Align.FILL)
         
         color = event.get('color', '#4285f4')
-        # Convert hex to rgba with alpha for translucency
-        r = int(color[1:3], 16)
-        g = int(color[3:5], 16)
-        b = int(color[5:7], 16)
+        
+        # Helper to parse color safely (supports #RRGGBB and "R, G, B")
+        def parse_color(c):
+            if c.startswith('#'):
+                try:
+                    r = int(c[1:3], 16)
+                    g = int(c[3:5], 16)
+                    b = int(c[5:7], 16)
+                    return r, g, b
+                except:
+                    return 66, 133, 244
+            elif ',' in c:
+                try:
+                    parts = [int(p.strip()) for p in c.split(',')]
+                    return parts[0], parts[1], parts[2]
+                except:
+                    return 66, 133, 244
+            return 66, 133, 244
+
+        r, g, b = parse_color(color)
         
         css = Gtk.CssProvider()
         css.load_from_data(f"""

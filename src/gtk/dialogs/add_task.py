@@ -70,6 +70,14 @@ class AddTaskDialog(Adw.Window):
         self.category_row.set_model(categories)
         category_group.add(self.category_row)
         content.append(category_group)
+
+        # Tags entry
+        tags_group = Adw.PreferencesGroup()
+        self.tags_entry = Adw.EntryRow()
+        self.tags_entry.set_title("Etiquetas")
+        self.tags_entry.set_tooltip_text("Separadas por coma (ej: Data Mining, Proyecto)")
+        tags_group.add(self.tags_entry)
+        content.append(tags_group)
         
         # Priority dropdown
         priority_group = Adw.PreferencesGroup()
@@ -168,6 +176,10 @@ class AddTaskDialog(Adw.Window):
         start, end = buffer.get_bounds()
         description = buffer.get_text(start, end, False)
         
+        # Get tags
+        tags_text = self.tags_entry.get_text()
+        tags = [t.strip() for t in tags_text.split(',')] if tags_text else []
+        
         # Save task to database
         try:
             task_manager.add_task(
@@ -175,7 +187,8 @@ class AddTaskDialog(Adw.Window):
                 category=category,
                 description=description,
                 priority=priority,
-                deadline=self.selected_deadline
+                deadline=self.selected_deadline,
+                tags=tags
             )
             
             # If Trabajo category, also save to Obsidian Pasantías file

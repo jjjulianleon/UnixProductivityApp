@@ -172,7 +172,7 @@ class DashboardView(Gtk.Box):
         """Refresh dashboard data"""
         try:
             # Get task counts
-            pending = len(task_manager.get_pending_tasks())
+            pending = len(task_manager.get_pending_tasks()) + len(task_manager.get_in_progress_tasks())
             today = len(task_manager.get_today_tasks())
             overdue = len(task_manager.get_overdue_tasks())
             completed = len(task_manager.get_completed_tasks())

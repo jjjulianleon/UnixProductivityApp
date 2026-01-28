@@ -197,6 +197,20 @@ class KanbanBoard(Gtk.Box):
         
         self.current_filter = "Todas"
         self._setup_ui()
+        
+        # Connect signals
+        from src.core.signals import signals
+        signals.task_added.connect(self._on_task_signal)
+        signals.task_updated.connect(self._on_task_update_signal)
+        signals.task_deleted.connect(self._on_task_signal)
+        signals.tasks_reloaded.connect(self.refresh)
+        
+        self.refresh()
+        
+    def _on_task_signal(self, *args):
+        self.refresh()
+        
+    def _on_task_update_signal(self, *args):
         self.refresh()
         
     def _setup_ui(self):
@@ -332,7 +346,26 @@ class KanbanBoard(Gtk.Box):
                         
                 # Apply search filter
                 if search_text:
-                    tasks = [t for t in tasks if search_text in t.get('title', '').lower()]
+                    filtered_tasks = []
+                    for t in tasks:
+                        # Search in title
+                        if search_text in t.get('title', '').lower():
+                            filtered_tasks.append(t)
+                            continue
+                        # Search in description
+                        if search_text in t.get('description', '').lower():
+                            filtered_tasks.append(t)
+                            continue
+                        # Search in tags
+                        tags = t.get('tags', [])
+                        if tags and any(search_text in str(tag).lower() for tag in tags):
+                            filtered_tasks.append(t)
+                            continue
+                        # Search in category
+                        if search_text in t.get('category', '').lower():
+                            filtered_tasks.append(t)
+                            continue
+                    tasks = filtered_tasks
             except:
                 tasks = []
             

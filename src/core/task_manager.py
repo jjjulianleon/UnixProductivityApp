@@ -20,7 +20,7 @@ try:
     HAS_ICS = True
 except ImportError:
     HAS_ICS = False
-    print("ICS/iCloud module not found")
+    print("ICS/iCloud module not found", file=sys.stderr)
 
 
 class TaskManager:

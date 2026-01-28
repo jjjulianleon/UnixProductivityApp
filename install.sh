@@ -65,7 +65,8 @@ cp "$SOURCE_DIR/plasmoid_backend.py" "$INSTALL_DIR/"
 echo -e "${GREEN}✓ Archivos copiados a $INSTALL_DIR${NC}"
 
 # Copy icon
-cp "$SOURCE_DIR/assets/app_icon.svg" "$ICONS_DIR/$APP_NAME.svg"
+mkdir -p "$HOME/.local/share/icons/hicolor/48x48/apps"
+cp "/home/jjulianleon/Pictures/icons/uniapp.png" "$HOME/.local/share/icons/hicolor/48x48/apps/$APP_NAME.png"
 echo -e "${GREEN}✓ Icono instalado${NC}"
 
 # Create launcher scripts
@@ -101,7 +102,7 @@ Name=Unix Productivity
 GenericName=Task Manager
 Comment=Productivity application with calendar, kanban, pomodoro and more
 Exec=$BIN_DIR/$APP_NAME
-Icon=$APP_NAME
+Icon=$HOME/Pictures/icons/uniapp.png
 Terminal=false
 Categories=Office;ProjectManagement;Calendar;
 Keywords=tasks;calendar;kanban;pomodoro;productivity;

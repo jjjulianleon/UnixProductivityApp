@@ -1,19 +1,20 @@
 {
     "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0",
     "KPlugin": {
+        "Id": "com.jjjulianleon.unixproductivity",
         "Name": "Unix Productivity Widget",
         "Description": "Native calendar, tasks and pomodoro widget",
+        "Version": "1.0",
+        "Category": "Utilities",
         "Icon": "office-calendar",
+        "License": "GPL-3.0+",
         "Authors": [
             {
                 "Name": "Julian Leon",
                 "Email": "julian@example.com"
             }
         ],
-        "Id": "com.jjjulianleon.unixproductivity",
-        "Version": "1.0",
-        "Website": "https://github.com/jjjulianleon/UnixProductivityApp",
-        "Category": "Utilities",
-        "License": "GPL-3.0+"
+        "Website": "https://github.com/jjjulianleon/UnixProductivityApp"
     }
 }
