@@ -28,6 +28,7 @@ class UnixProductivityApp(Adw.Application):
         )
         self.window = None
         self.auto_sync = None
+        self.notification_manager = None
 
     def do_startup(self):
         """Load CSS and setup application"""
@@ -98,6 +99,9 @@ class UnixProductivityApp(Adw.Application):
         # Start auto-sync for Brightspace/Teams
         self._start_auto_sync()
 
+        # Start notification manager for deadline reminders
+        self._start_notifications()
+
         self.window.present()
 
     def _start_auto_sync(self):
@@ -117,6 +121,17 @@ class UnixProductivityApp(Adw.Application):
             print("Auto-sync started for Brightspace D2L")
         except Exception as e:
             print(f"Auto-sync init error: {e}")
+
+    def _start_notifications(self):
+        """Start notification manager for deadline reminders"""
+        try:
+            from src.core.notifications import notification_manager
+
+            self.notification_manager = notification_manager
+            self.notification_manager.start()
+            print("Notification manager started (deadline reminders at 3d, 1d, same day)")
+        except Exception as e:
+            print(f"Notification manager init error: {e}")
 
     def _on_sync_complete(self, result):
         """Handle sync completion - refresh UI"""

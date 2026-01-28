@@ -113,11 +113,13 @@ class NotificationManager:
         for task in tasks:
             if task['id'] in notified_today:
                 continue
-            
+
             try:
-                deadline = datetime.strptime(task['deadline'], "%Y-%m-%d").date()
+                # Handle both YYYY-MM-DD and YYYY-MM-DDTHH:MM:SS formats
+                deadline_str = task['deadline'][:10]  # Extract just YYYY-MM-DD
+                deadline = datetime.strptime(deadline_str, "%Y-%m-%d").date()
                 days_until = (deadline - today).days
-                
+
                 if days_until <= 3:
                     self._notify_task_deadline(task, days_until)
                     notified_today.append(task['id'])
@@ -194,7 +196,9 @@ class NotificationManager:
     def schedule_deadline_reminders(self, task_id: int, deadline: str):
         """Automatically schedule reminders for a task deadline"""
         try:
-            deadline_date = datetime.strptime(deadline, "%Y-%m-%d")
+            # Handle both YYYY-MM-DD and YYYY-MM-DDTHH:MM:SS formats
+            deadline_str = deadline[:10]  # Extract just YYYY-MM-DD
+            deadline_date = datetime.strptime(deadline_str, "%Y-%m-%d")
             
             # Clear existing reminders for this task
             db.delete_task_reminders(task_id)
