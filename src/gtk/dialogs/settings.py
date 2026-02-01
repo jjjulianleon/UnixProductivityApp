@@ -192,7 +192,7 @@ class SettingsDialog(Adw.PreferencesWindow):
         about_group = Adw.PreferencesGroup()
         
         version_row = Adw.ActionRow()
-        version_row.set_title("Unix Productivity App")
+        version_row.set_title("UniDex")
         version_row.set_subtitle("Versión 2.0 (GTK4)")
         about_group.add(version_row)
         

@@ -4,7 +4,7 @@ Shared constants and configuration
 from pathlib import Path
 
 # Application info
-APP_NAME = "UnixProductivityApp"
+APP_NAME = "UniDex"
 APP_VERSION = "1.0.0"
 APP_AUTHOR = "Julian Leon"
 

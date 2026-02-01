@@ -1,5 +1,5 @@
 """
-Settings Dialog for UnixProductivityApp
+Settings Dialog for UniDex
 """
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
@@ -456,7 +456,7 @@ class SettingsDialog(QDialog):
         info_group.setStyleSheet(self._get_group_style())
         info_layout = QVBoxLayout(info_group)
         
-        app_name = QLabel("UnixProductivityApp v1.0")
+        app_name = QLabel("UniDex v1.0")
         app_name.setStyleSheet(f"color: rgb({COLORS['text_primary']}); font-weight: bold; background: transparent;")
         info_layout.addWidget(app_name)
         
@@ -471,7 +471,7 @@ class SettingsDialog(QDialog):
         data_group.setStyleSheet(self._get_group_style())
         data_layout = QVBoxLayout(data_group)
         
-        data_path = QLabel("~/.local/share/UnixProductivityApp/")
+        data_path = QLabel("~/.local/share/UniDex/")
         data_path.setStyleSheet(f"color: rgb({COLORS['text_muted']}); font-family: monospace; background: transparent;")
         data_layout.addWidget(data_path)
         

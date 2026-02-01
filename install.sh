@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Unix Productivity App - Fedora Installation Script
+# UniDex - Fedora Installation Script
 # Installs the main app and widget as native Fedora applications
 # =============================================================================
 
@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-APP_NAME="unix-productivity"
+APP_NAME="unidex"
 INSTALL_DIR="$HOME/.local/share/$APP_NAME"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
@@ -22,7 +22,7 @@ AUTOSTART_DIR="$HOME/.config/autostart"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}   Unix Productivity App - Fedora Installer${NC}"
+echo -e "${BLUE}   UniDex - Fedora Installer${NC}"
 echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -64,6 +64,12 @@ cp "$SOURCE_DIR/requirements_gtk.txt" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/plasmoid_backend.py" "$INSTALL_DIR/"
 echo -e "${GREEN}✓ Archivos copiados a $INSTALL_DIR${NC}"
 
+# Setup Virtual Environment
+echo -e "${YELLOW}[3.5/6]${NC} Configurando entorno virtual..."
+python3 -m venv --system-site-packages "$INSTALL_DIR/.venv"
+"$INSTALL_DIR/.venv/bin/pip" install -r "$INSTALL_DIR/requirements_gtk.txt"
+echo -e "${GREEN}✓ Entorno virtual configurado${NC}"
+
 # Copy icon
 mkdir -p "$HOME/.local/share/icons/hicolor/48x48/apps"
 cp "/home/jjulianleon/Pictures/icons/uniapp.png" "$HOME/.local/share/icons/hicolor/48x48/apps/$APP_NAME.png"
@@ -76,7 +82,7 @@ echo -e "${YELLOW}[4/6]${NC} Creando scripts de lanzamiento..."
 cat > "$BIN_DIR/$APP_NAME" << EOF
 #!/bin/bash
 cd "$INSTALL_DIR"
-exec python3 main_gtk.py "\$@"
+exec "$INSTALL_DIR/.venv/bin/python3" main_gtk.py "\$@"
 EOF
 chmod +x "$BIN_DIR/$APP_NAME"
 
@@ -84,7 +90,7 @@ chmod +x "$BIN_DIR/$APP_NAME"
 cat > "$BIN_DIR/${APP_NAME}-widget" << EOF
 #!/bin/bash
 cd "$INSTALL_DIR"
-exec python3 widget_gtk.py "\$@"
+exec "$INSTALL_DIR/.venv/bin/python3" widget_gtk.py "\$@"
 EOF
 chmod +x "$BIN_DIR/${APP_NAME}-widget"
 
@@ -98,7 +104,7 @@ cat > "$DESKTOP_DIR/$APP_NAME.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Unix Productivity
+Name=UniDex
 GenericName=Task Manager
 Comment=Productivity application with calendar, kanban, pomodoro and more
 Exec=$BIN_DIR/$APP_NAME
@@ -107,7 +113,7 @@ Terminal=false
 Categories=Office;ProjectManagement;Calendar;
 Keywords=tasks;calendar;kanban;pomodoro;productivity;
 StartupNotify=true
-StartupWMClass=com.github.jjjulianleon.unixproductivity
+StartupWMClass=com.github.jjjulianleon.unidex
 EOF
 
 # Widget .desktop
@@ -115,7 +121,7 @@ cat > "$DESKTOP_DIR/${APP_NAME}-widget.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Productivity Widget
+Name=UniDex Widget
 GenericName=Desktop Widget
 Comment=Compact productivity widget for desktop
 Exec=$BIN_DIR/${APP_NAME}-widget
@@ -157,7 +163,7 @@ echo -e "${GREEN}   ✅ Instalación completada exitosamente!${NC}"
 echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "Ahora puedes:"
-echo -e "  ${BLUE}•${NC} Buscar '${YELLOW}Unix Productivity${NC}' en GNOME Activities"
+echo -e "  ${BLUE}•${NC} Buscar '${YELLOW}UniDex${NC}' en GNOME Activities"
 echo -e "  ${BLUE}•${NC} Ejecutar desde terminal: ${YELLOW}$APP_NAME${NC}"
 echo -e "  ${BLUE}•${NC} El widget iniciará automáticamente con tu sesión"
 echo ""

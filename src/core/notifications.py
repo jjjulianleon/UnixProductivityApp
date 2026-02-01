@@ -25,7 +25,7 @@ class NotificationManager:
         return cls._instance
     
     def __init__(self):
-        self.app_name = "UnixProductivityApp"
+        self.app_name = "UniDex"
         self.check_interval_ms = 60000  # Check every minute
         self.backup_interval_ms = 6 * 60 * 60 * 1000  # 6 hours
         

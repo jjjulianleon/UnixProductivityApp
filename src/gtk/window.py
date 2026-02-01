@@ -33,7 +33,7 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        self.set_title("Unix Productivity")
+        self.set_title("UniDex")
         self.set_default_size(1100, 700)
         self.add_css_class("main-window")
         

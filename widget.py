@@ -244,7 +244,7 @@ class DesktopWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.signals = SignalHub.get_instance()
-        self.setWindowTitle("UnixProductivityApp Widget")
+        self.setWindowTitle("UniDex Widget")
         self.setFixedSize(WIDGET_WIDTH, WIDGET_HEIGHT)
         
         # Widget flags for desktop widget behavior

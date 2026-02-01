@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 
 
 class Database:
-    """SQLite database manager for UnixProductivityApp"""
+    """SQLite database manager for UniDex"""
     
     _instance = None
     
@@ -23,7 +23,7 @@ class Database:
         return cls._instance
     
     def __init__(self):
-        self.db_dir = Path.home() / ".local" / "share" / "UnixProductivityApp"
+        self.db_dir = Path.home() / ".local" / "share" / "UniDex"
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.db_dir / "data.db"
         self.backup_dir = self.db_dir / "backups"

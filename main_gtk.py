@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnixProductivityApp - GTK4 + Libadwaita Version
+UniDex - GTK4 + Libadwaita Version
 Main entry point with translucent window support
 """
 import sys
@@ -18,13 +18,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.gtk.window import MainWindow
 
 
-class UnixProductivityApp(Adw.Application):
+class UniDexApp(Adw.Application):
     """Main GTK4 Application"""
 
     def __init__(self):
         super().__init__(
-            application_id="com.github.jjjulianleon.unixproductivity",
-            flags=Gio.ApplicationFlags.FLAGS_NONE
+            application_id="com.github.jjjulianleon.unidex",
+            flags=Gio.ApplicationFlags.FLAGS_NONE,
         )
         self.window = None
         self.auto_sync = None
@@ -154,7 +154,7 @@ class UnixProductivityApp(Adw.Application):
 
 def main():
     """Main entry point"""
-    app = UnixProductivityApp()
+    app = UniDexApp()
     return app.run(sys.argv)
 
 

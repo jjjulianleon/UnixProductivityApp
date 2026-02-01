@@ -2,9 +2,9 @@
 # Direct install script for KDE Plasma Widget
 # Bypasses kpackagetool6 validation issues by manual installation
 
-APP_ID="com.jjjulianleon.unixproductivity"
+APP_ID="com.jjjulianleon.unidex"
 INSTALL_DIR="$HOME/.local/share/plasma/plasmoids/$APP_ID"
-BACKEND_DIR="$HOME/.local/share/unix-productivity"
+BACKEND_DIR="$HOME/.local/share/unidex"
 
 echo "📦 Instalando widget nativo..."
 
@@ -21,15 +21,15 @@ cp main_gtk.py "$BACKEND_DIR/"
 cp plasmoid_backend.py "$BACKEND_DIR/"
 
 # 2. Fix Wrapper Script
-echo "   -> Configurando ejecutable en ~/.local/bin/unix-productivity"
+echo "   -> Configurando ejecutable en ~/.local/bin/unidex"
 mkdir -p "$HOME/.local/bin"
-cat > "$HOME/.local/bin/unix-productivity" << EOF
+cat > "$HOME/.local/bin/unidex" << EOF
 #!/bin/bash
 cd "$BACKEND_DIR"
 # Usamos main_gtk.py (Versión GTK migrada)
 exec python3 main_gtk.py "\$@"
 EOF
-chmod +x "$HOME/.local/bin/unix-productivity"
+chmod +x "$HOME/.local/bin/unidex"
 
 # 3. Install Plasmoid
 echo "   -> Instalando plasmoid en $INSTALL_DIR"
@@ -59,4 +59,4 @@ else
     nohup plasmashell >/dev/null 2>&1 &
 fi
 
-echo "🚀 Listo! Busca 'Unix Productivity Widget' en tu lista de widgets."
+echo "🚀 Listo! Busca 'UniDex Widget' en tu lista de widgets."

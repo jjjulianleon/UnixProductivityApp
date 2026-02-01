@@ -1,16 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# Unix Productivity App - Uninstall Script
+# UniDex - Uninstall Script
 # =============================================================================
 
-APP_NAME="unix-productivity"
+APP_NAME="unidex"
 INSTALL_DIR="$HOME/.local/share/$APP_NAME"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICONS_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 AUTOSTART_DIR="$HOME/.config/autostart"
 
-echo "🗑️ Desinstalando Unix Productivity App..."
+echo "🗑️ Desinstalando UniDex..."
 
 # Remove files
 rm -rf "$INSTALL_DIR"

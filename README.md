@@ -1,4 +1,4 @@
-# UnixProductivityApp
+# UniDex
 
 Aplicacion de productividad para Linux diseñada para KDE Plasma con integracion a Obsidian, calendario estilo Microsoft Teams, gestion de tareas con Kanban y temporizador Pomodoro.
 
@@ -229,7 +229,7 @@ CalendarWidget/
 
 ### Base de Datos
 
-Ubicacion: `~/.local/share/UnixProductivityApp/data.db`
+Ubicacion: `~/.local/share/UniDex/data.db`
 
 Tablas:
 - tasks: Tareas con titulo, descripcion, categoria, estado, prioridad, fecha limite
@@ -243,7 +243,7 @@ Tablas:
 
 ### Backups
 
-Ubicacion: `~/.local/share/UnixProductivityApp/backups/`
+Ubicacion: `~/.local/share/UniDex/backups/`
 
 Formatos de exportacion:
 - JSON
@@ -276,7 +276,7 @@ Formatos de exportacion:
 ```desktop
 [Desktop Entry]
 Type=Application
-Name=UnixProductivityApp Widget
+Name=UniDex Widget
 Exec=python /ruta/a/CalendarWidget/widget.py
 Hidden=false
 X-KDE-autostart-after=panel

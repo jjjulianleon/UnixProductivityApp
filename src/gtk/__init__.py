@@ -1,3 +1,3 @@
 """
-GTK4 UI Package for UnixProductivityApp
+GTK4 UI Package for UniDex
 """

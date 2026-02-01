@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Productivity Widget
+Name=UniDex Widget
 GenericName=Desktop Widget
 Comment=Compact productivity widget for desktop
 Exec=python3 /home/jjulianleon/Desktop/CalendarWidget/widget.py

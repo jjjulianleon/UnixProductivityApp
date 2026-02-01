@@ -1,5 +1,5 @@
 """
-Shared styles and theming for UnixProductivityApp
+Shared styles and theming for UniDex
 """
 
 # Color palette

@@ -1,5 +1,5 @@
 {
-    "name": "UnixProductivityApp",
+    "name": "UniDex",
     "build": {
         "dockerfile": "Dockerfile",
         "context": ".."

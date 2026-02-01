@@ -1,6 +1,6 @@
-# Documentacion Tecnica - UnixProductivityApp
+# Documentacion Tecnica - UniDex
 
-Este documento contiene la documentacion tecnica completa de UnixProductivityApp, incluyendo arquitectura, estado actual de implementacion, integraciones pendientes y roadmap de desarrollo.
+Este documento contiene la documentacion tecnica completa de UniDex, incluyendo arquitectura, estado actual de implementacion, integraciones pendientes y roadmap de desarrollo.
 
 ---
 
@@ -78,9 +78,9 @@ requests>=2.28.0    # Obtener feeds ICS remotos
 
 | Recurso | Ruta |
 |---------|------|
-| Base de datos | ~/.local/share/UnixProductivityApp/data.db |
-| Backups | ~/.local/share/UnixProductivityApp/backups/ |
-| Configuracion | ~/.config/UnixProductivityApp/ |
+| Base de datos | ~/.local/share/UniDex/data.db |
+| Backups | ~/.local/share/UniDex/backups/ |
+| Configuracion | ~/.config/UniDex/ |
 | Config ICS | ~/.config/calendar_widget/ics_config.json |
 | Config iCloud | ~/.config/calendar_widget/icloud_config.json |
 | Cache ICS | ~/.config/calendar_widget/cache/ |
@@ -775,7 +775,7 @@ class NuevoWidget(QWidget):
 ## Contacto
 
 Desarrollador: Julian Leon
-Proyecto: UnixProductivityApp
+Proyecto: UniDex
 Plataforma: Fedora Linux / KDE Plasma
 
 ---

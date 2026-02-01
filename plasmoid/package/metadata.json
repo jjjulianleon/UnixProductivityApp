@@ -2,8 +2,8 @@
     "KPackageStructure": "Plasma/Applet",
     "X-Plasma-API-Minimum-Version": "6.0",
     "KPlugin": {
-        "Id": "com.jjjulianleon.unixproductivity",
-        "Name": "Unix Productivity Widget",
+        "Id": "com.jjjulianleon.unidex",
+        "Name": "UniDex Widget",
         "Description": "Native calendar, tasks and pomodoro widget",
         "Version": "1.0",
         "Category": "Utilities",
@@ -15,6 +15,6 @@
                 "Email": "julian@example.com"
             }
         ],
-        "Website": "https://github.com/jjjulianleon/UnixProductivityApp"
+        "Website": "https://github.com/jjjulianleon/UniDex"
     }
 }

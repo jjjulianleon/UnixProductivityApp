@@ -1,5 +1,5 @@
 """
-Main Application Window - Unix Productivity App
+Main Application Window - UniDex
 """
 import sys
 from pathlib import Path
