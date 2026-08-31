@@ -139,6 +139,29 @@ window.widget-window {
   font-size: 6px;
 }
 
+/* Vista de mes: cada celda es un dia con sus clases y entregas dentro */
+.month-header {
+  padding: 6px 0;
+}
+
+.month-cell {
+  border-top: 1px solid alpha(currentColor, 0.12);
+  border-left: 1px solid alpha(currentColor, 0.12);
+  padding: 4px 6px;
+  min-height: 84px;
+}
+
+.month-cell-outside {
+  opacity: 0.35;
+}
+
+/* Un evento es un boton, pero no debe parecerlo: sin relleno de boton */
+.month-event {
+  padding: 0 2px;
+  min-height: 18px;
+  border-radius: 4px;
+}
+
 /* ============== HORARIO ============== */
 .schedule-event {
   border-radius: 6px;

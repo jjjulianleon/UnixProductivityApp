@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.database import Database
-from src.utils.constants import SEMESTER_END
+from src.utils.constants import SEMESTER_END, SEMESTER_START
 
 
 class TestDatabase(unittest.TestCase):
@@ -442,15 +442,17 @@ class TestHorarioPorFecha(unittest.TestCase):
         self.db.conn.close()
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_recurrente_se_corta_tras_fin_de_semestre(self):
-        """El horario semanal no se repite pasada la semana del 16 de diciembre"""
+    def test_recurrente_solo_dentro_del_semestre(self):
+        """El horario solo existe entre la semana del 16-ago y la del 16-dic"""
         self.db.add_schedule_event(title="Algoritmos", day_of_week=0,
                                    start_time="13:00", end_time="14:20")
         dentro = SEMESTER_END.date() - timedelta(days=7)
-        fuera = SEMESTER_END.date() + timedelta(days=1)
+        antes = SEMESTER_START.date() - timedelta(days=1)
+        despues = SEMESTER_END.date() + timedelta(days=1)
 
         self.assertEqual(len(self.db.get_schedule_events(0, for_date=dentro)), 1)
-        self.assertEqual(self.db.get_schedule_events(0, for_date=fuera), [])
+        self.assertEqual(self.db.get_schedule_events(0, for_date=antes), [])
+        self.assertEqual(self.db.get_schedule_events(0, for_date=despues), [])
         # Sin fecha se sigue viendo todo (editar / exportar)
         self.assertEqual(len(self.db.get_schedule_events(0)), 1)
 

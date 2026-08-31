@@ -12,9 +12,9 @@ APP_AUTHOR = "Julian Leon"
 
 # Semester Constraints (2026)
 from datetime import datetime
-SEMESTER_START = datetime(2026, 1, 12)
-# El horario semanal termina con la semana del 16 de diciembre (domingo 20).
-# Nada del horario se pinta despues de esta fecha.
+# El horario va de la semana del 16 de agosto a la del 16 de diciembre.
+# Fuera de esas fechas no se pinta nada del horario semanal.
+SEMESTER_START = datetime(2026, 8, 16)
 SEMESTER_END = datetime(2026, 12, 20)
 INTERNSHIP_END = datetime(2026, 2, 14)
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from ..utils.system import data_dir
-from ..utils.constants import SEMESTER_END
+from ..utils.constants import SEMESTER_END, SEMESTER_START
 
 
 class Database:
@@ -486,7 +486,7 @@ class Database:
         Sin `for_date` devuelve la tabla tal cual (exportar, editar). Con fecha
         aplica las dos reglas de calendario en un solo sitio, porque antes cada
         vista (horario, dashboard, widget) las repetia a su manera:
-          - el horario no se repite pasado el fin de semestre,
+          - el horario solo existe dentro del semestre,
           - un evento no recurrente solo aparece en su propia fecha.
         """
         cursor = self.conn.cursor()
@@ -498,7 +498,7 @@ class Database:
 
         if for_date is None:
             return events
-        if for_date > SEMESTER_END.date():
+        if not SEMESTER_START.date() <= for_date <= SEMESTER_END.date():
             return []
         return [e for e in events if self._event_on_date(e, for_date)]
 

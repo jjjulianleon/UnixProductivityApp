@@ -21,9 +21,12 @@ class TestICSIntegration(unittest.TestCase):
         db.conn = fresh.conn
         db.db_path = fresh.db_path
         
-        # Reset TaskManager singleton
+        # Reset TaskManager singleton. Sin desactivar el sync inicial, el hilo
+        # de fondo que arranca en __init__ inserta tareas de Obsidian en la base
+        # compartida del test y el conteo salia 2 en vez de 1 a ratos.
         TaskManager._instance = None
-        self.tm = TaskManager.get_instance()
+        with patch.object(TaskManager, '_initial_sync_and_ics', lambda self: None):
+            self.tm = TaskManager.get_instance()
         
         # Mock ICS sync to avoid real network/file calls
         self.mock_results = {
