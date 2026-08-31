@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
 
 
+DAY_NAMES_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
 # Semester configuration
 SEMESTER_START = datetime(2026, 1, 12)
 SEMESTER_END = datetime(2026, 5, 16)
@@ -80,16 +82,29 @@ class AddEventDialog(Adw.Window):
         group1.add(self.title_entry)
         content.append(group1)
 
-        # Day
-        self.day_row = Adw.ComboRow()
-        self.day_row.set_title("Día")
-        self.day_row.set_model(Gtk.StringList.new(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]))
-        if self.event:
-            self.day_row.set_selected(self.event.get('day_of_week', default_day))
-        else:
-            self.day_row.set_selected(default_day)
+        # Dias: varios a la vez, para una clase que se repite (lunes y miercoles)
         group2 = Adw.PreferencesGroup()
-        group2.add(self.day_row)
+        group2.set_title("Días")
+        group2.set_description("Se crea el mismo evento en cada día marcado")
+
+        days_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
+                           homogeneous=True, spacing=0)
+        days_box.add_css_class("linked")
+        days_box.set_margin_top(6)
+
+        active = self.event.get('day_of_week', default_day) if self.event else default_day
+        self.day_buttons = []
+        for index, name in enumerate(DAY_NAMES_SHORT):
+            button = Gtk.ToggleButton(label=name)
+            button.set_active(index == active)
+            self.day_buttons.append(button)
+            days_box.append(button)
+
+        # Nunca dejar cero dias marcados: el ultimo activo no se puede apagar
+        for button in self.day_buttons:
+            button.connect("toggled", self._on_day_toggled)
+
+        group2.add(days_box)
         content.append(group2)
 
         # Time
@@ -115,8 +130,9 @@ class AddEventDialog(Adw.Window):
         # Recurring
         self.recurring = Adw.SwitchRow()
         self.recurring.set_title("Repetir cada semana")
-        if self.event:
-            self.recurring.set_active(self.event.get('recurring', 1) == 1)
+        # Una clase se repite: es el caso normal en esta vista.
+        self.recurring.set_active(self.event.get('recurring', 1) == 1
+                                  if self.event else True)
         group4 = Adw.PreferencesGroup()
         group4.add(self.recurring)
         content.append(group4)
@@ -145,9 +161,22 @@ class AddEventDialog(Adw.Window):
 
         main_box.append(content)
 
+    def _on_day_toggled(self, button):
+        """Impide quedarse sin ningun dia marcado"""
+        if not button.get_active() and not self.selected_days():
+            button.set_active(True)
+
+    def selected_days(self) -> list:
+        return [index for index, button in enumerate(self.day_buttons)
+                if button.get_active()]
+
     def _on_save(self, btn):
         title = self.title_entry.get_text()
         if not title:
+            return
+
+        days = self.selected_days()
+        if not days:
             return
 
         # Color mapping
@@ -155,24 +184,29 @@ class AddEventDialog(Adw.Window):
         selected_color = colors[self.color_row.get_selected()]
 
         try:
+            start = self.start_entry.get_text()
+            end = self.end_entry.get_text()
+            recurring = 1 if self.recurring.get_active() else 0
+
             if self.is_edit and self.event.get('id'):
-                # Update existing event
+                # El evento que se estaba editando se queda en el primer dia
+                # marcado; los demas se crean como eventos nuevos.
                 task_manager.update_schedule_event(
                     self.event['id'],
                     title=title,
-                    day_of_week=self.day_row.get_selected(),
-                    start_time=self.start_entry.get_text(),
-                    end_time=self.end_entry.get_text(),
+                    day_of_week=days[0],
+                    start_time=start,
+                    end_time=end,
                     color=selected_color
                 )
-            else:
-                # Add new event
-                recurring = 1 if self.recurring.get_active() else 0
+                days = days[1:]
+
+            for day in days:
                 task_manager.add_schedule_event(
                     title=title,
-                    day_of_week=self.day_row.get_selected(),
-                    start_time=self.start_entry.get_text(),
-                    end_time=self.end_entry.get_text(),
+                    day_of_week=day,
+                    start_time=start,
+                    end_time=end,
                     color=selected_color,
                     recurring=recurring
                 )
@@ -294,7 +328,7 @@ class WeeklySchedule(Gtk.Box):
         self.grid.attach(Gtk.Label(label=""), 0, 0, 1, 1)
         
         # Day headers
-        day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+        day_names = DAY_NAMES_SHORT
         for col, name in enumerate(day_names, start=1):
             day_date = self.current_week_start + timedelta(days=col-1)
             is_today = day_date.date() == today
@@ -518,7 +552,6 @@ class WeeklySchedule(Gtk.Box):
                 border-right: none;
                 border-bottom: none;
                 min-width: {event_width - 6}px;
-                max-width: {event_width - 2}px;
                 min-height: {event_height - 2}px;
             }}
             button:hover {{

@@ -88,3 +88,62 @@ class TestAppActions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAS_DISPLAY, "requiere sesion grafica")
+class TestEventoVariosDias(unittest.TestCase):
+    """Un evento puede crearse en varios dias a la vez (misma clase L y X)"""
+
+    def setUp(self):
+        from src.core.database import Database, db
+        from src.core.task_manager import TaskManager
+
+        fresh = Database(":memory:")
+        db.conn, db.db_path = fresh.conn, fresh.db_path
+        self.db = db
+        TaskManager._instance = None
+
+    def dialog(self, **kwargs):
+        from src.gtk.widgets.schedule import AddEventDialog
+        return AddEventDialog(**kwargs)
+
+    def test_guardar_crea_un_evento_por_dia_marcado(self):
+        dialog = self.dialog(default_day=0, default_hour=7)
+        dialog.title_entry.set_text("Proyecto Integrador CMP")
+        dialog.start_entry.set_text("07:00")
+        dialog.end_entry.set_text("08:20")
+        dialog.day_buttons[2].set_active(True)  # ademas del lunes, miercoles
+
+        self.assertEqual(dialog.selected_days(), [0, 2])
+        dialog._on_save(None)
+
+        creados = sorted(self.db.get_schedule_events(), key=lambda e: e['day_of_week'])
+        self.assertEqual([e['day_of_week'] for e in creados], [0, 2])
+        for evento in creados:
+            self.assertEqual(evento['title'], "Proyecto Integrador CMP")
+            self.assertEqual(evento['start_time'], "07:00")
+            self.assertEqual(evento['end_time'], "08:20")
+
+    def test_no_se_puede_dejar_sin_ningun_dia(self):
+        dialog = self.dialog(default_day=1, default_hour=9)
+        self.assertEqual(dialog.selected_days(), [1])
+
+        dialog.day_buttons[1].set_active(False)  # apagar el unico marcado
+
+        self.assertEqual(dialog.selected_days(), [1], "vuelve a marcarse solo")
+
+    def test_editar_mueve_el_evento_y_crea_los_dias_extra(self):
+        event_id = self.db.add_schedule_event(title="Clase", day_of_week=1,
+                                              start_time="08:30", end_time="09:50",
+                                              color="#4285f4")
+        evento = dict(self.db.get_schedule_events(1)[0])
+        evento['start'], evento['end'] = evento['start_time'], evento['end_time']
+
+        dialog = self.dialog(event=evento)
+        dialog.day_buttons[3].set_active(True)  # martes + jueves
+        dialog._on_save(None)
+
+        creados = sorted(self.db.get_schedule_events(), key=lambda e: e['day_of_week'])
+        self.assertEqual([e['day_of_week'] for e in creados], [1, 3])
+        # el original se reutiliza, no se duplica
+        self.assertIn(event_id, [e['id'] for e in creados])

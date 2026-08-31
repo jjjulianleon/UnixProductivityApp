@@ -221,9 +221,15 @@ El tablero Kanban organiza las tareas en tres columnas:
 Vista tipo calendario de clases que muestra eventos recurrentes por dia de la semana:
 
 1. Hacer clic en un bloque horario vacio para **crear un evento**.
-2. Completar: titulo, dia de la semana, hora de inicio, hora de fin y color.
+2. Completar: titulo, **dias**, hora de inicio, hora de fin y color.
 3. Los eventos recurrentes aparecen automaticamente cada semana.
 4. Hacer clic en un evento existente para editarlo o eliminarlo.
+
+**Varios dias a la vez:** en "Dias" se pueden marcar todos los que haga falta.
+Una clase que se da lunes y miercoles se crea una sola vez marcando `Lun` y
+`Mié`: se genera el mismo evento en cada dia marcado. Al editar un evento, el
+primer dia marcado reutiliza el evento existente y los demas se crean nuevos.
+Nunca se puede dejar la seleccion vacia.
 
 **Rango horario visible:** 6:00 AM a 10:00 PM.
 
