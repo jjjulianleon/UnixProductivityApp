@@ -1,9 +1,0 @@
-# Core GUI framework
-PyQt6>=6.4.0
-
-# Calendar integrations
-caldav>=1.2.0
-icalendar>=5.0.0
-
-# HTTP requests for calendar feeds
-requests>=2.28.0
