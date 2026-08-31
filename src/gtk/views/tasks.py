@@ -13,9 +13,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
-
-# Obsidian Pasantías path
-PASANTIAS_MD_PATH = Path("/home/jjulianleon/Documents/Obsidian/Pasantías/Pendientes Pasantía.md")
+from src.gtk.widgets.common import bind_signals, fill_empty, reset_list
+from src.utils.constants import OBSIDIAN_PASANTIAS as PASANTIAS_MD_PATH
+from src.utils.system import open_path
 
 
 class TasksView(Gtk.Box):
@@ -35,10 +35,12 @@ class TasksView(Gtk.Box):
         
         # Connect signals
         from src.core.signals import signals
-        signals.task_added.connect(self._on_task_added)
-        signals.task_updated.connect(self._on_task_updated)
-        signals.task_deleted.connect(self._on_task_deleted)
-        signals.tasks_reloaded.connect(self.refresh)
+        bind_signals(self, [
+            (signals.task_added, self._on_task_added),
+            (signals.task_updated, self._on_task_updated),
+            (signals.task_deleted, self._on_task_deleted),
+            (signals.tasks_reloaded, self.refresh),
+        ])
         
         self.refresh()
 
@@ -188,13 +190,11 @@ class TasksView(Gtk.Box):
             tasks.extend(pasantia_tasks)
             
         if not tasks:
-            empty = Adw.StatusPage()
-            empty.set_icon_name("checkbox-checked-symbolic")
-            empty.set_title("Sin tareas")
-            empty.set_description("Crea una nueva tarea con el botón +")
-            self.tasks_list.append(empty)
+            fill_empty(self.tasks_list, "checkbox-checked-symbolic", "Sin tareas",
+                       "Crea una nueva tarea con el botón +")
             return
-            
+
+        reset_list(self.tasks_list)
         for task in tasks:
             row = self._create_task_row(task)
             self.tasks_list.append(row)
@@ -255,14 +255,14 @@ class TasksView(Gtk.Box):
         
         # Priority indicator
         priority = task.get('priority', 'media')
-        colors = {'alta': '#ea4335', 'media': '#fbbc05', 'baja': '#34a853'}
-        
+        styles = {'alta': 'error', 'media': 'warning', 'baja': 'success'}
+
         priority_dot = Gtk.Box()
         priority_dot.set_size_request(8, 8)
         priority_dot.set_valign(Gtk.Align.CENTER)
-        css = Gtk.CssProvider()
-        css.load_from_data(f"box {{ background: {colors.get(priority, '#888')}; border-radius: 50%; }}".encode())
-        priority_dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        priority_dot.add_css_class("color-dot")
+        if priority in styles:
+            priority_dot.add_css_class(styles[priority])
         row.add_prefix(priority_dot)
         
         # Checkbox (only for DB tasks)
@@ -289,8 +289,7 @@ class TasksView(Gtk.Box):
         """Show task details dialog"""
         if task.get('source') == 'obsidian':
             # For Obsidian tasks, open file
-            import subprocess
-            subprocess.Popen(['xdg-open', str(PASANTIAS_MD_PATH)])
+            open_path(PASANTIAS_MD_PATH)
             return
             
         from ..widgets.task_detail import TaskDetailDialog

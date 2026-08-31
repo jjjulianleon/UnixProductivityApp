@@ -228,13 +228,6 @@ class WeeklySchedule(Gtk.Box):
         today_btn.connect("clicked", lambda _: self._go_today())
         nav.append(today_btn)
         
-        add_btn = Gtk.Button()
-        add_btn.set_icon_name("list-add-symbolic")
-        add_btn.add_css_class("suggested-action")
-        add_btn.add_css_class("circular")
-        add_btn.connect("clicked", lambda _: self._show_add_dialog(0, 9))
-        nav.append(add_btn)
-        
         self.week_label = Gtk.Label()
         self.week_label.add_css_class("title-4")
         self.week_label.set_hexpand(True)
@@ -246,7 +239,14 @@ class WeeklySchedule(Gtk.Box):
         next_btn.add_css_class("flat")
         next_btn.connect("clicked", lambda _: self._change_week(7))
         nav.append(next_btn)
-        
+
+        add_btn = Gtk.Button(icon_name="list-add-symbolic")
+        add_btn.add_css_class("circular")
+        add_btn.add_css_class("flat")
+        add_btn.set_tooltip_text("Nuevo evento")
+        add_btn.connect("clicked", lambda _: self._show_add_dialog(0, 9))
+        nav.append(add_btn)
+
         self.append(nav)
         
         # Schedule grid
@@ -304,18 +304,10 @@ class WeeklySchedule(Gtk.Box):
             header.set_halign(Gtk.Align.FILL)
             header.set_valign(Gtk.Align.FILL)
             
+            header.add_css_class("schedule-day-header")
             if is_today:
-                # Translucent highlight for today - entire header
-                css = Gtk.CssProvider()
-                css.load_from_data(b"""
-                    box {
-                        background: alpha(@accent_color, 0.25);
-                        border-radius: 8px;
-                        padding: 4px;
-                    }
-                """)
-                header.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-                
+                header.add_css_class("schedule-today")
+
             name_lbl = Gtk.Label(label=name)
             name_lbl.add_css_class("caption")
             header.append(name_lbl)
@@ -336,16 +328,13 @@ class WeeklySchedule(Gtk.Box):
             
             # Day cells with hour separator line
             for col in range(1, 8):
+                # Una clase CSS, no un CssProvider nuevo por celda: son 91 celdas
+                # en cada refresco y los providers se iban acumulando en el widget.
                 cell = Gtk.Button()
                 cell.add_css_class("flat")
+                cell.add_css_class("schedule-cell")
                 cell.set_size_request(100, self.HOUR_HEIGHT)
                 cell.connect("clicked", lambda b, d=col-1, h=hour: self._show_add_dialog(d, h))
-                
-                # Add bottom border for hour separation
-                css = Gtk.CssProvider()
-                css.load_from_data(b"button { border-bottom: 1px solid alpha(white, 0.1); border-radius: 0; }")
-                cell.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-                
                 self.grid.attach(cell, col, row, 1, 1)
                 
         # Add events

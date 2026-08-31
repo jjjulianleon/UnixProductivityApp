@@ -34,15 +34,26 @@ class TaskManager:
     
     def __init__(self):
         self.obsidian = ObsidianSync()
-        self.ics_sync = UnifiedCalendarSync() if HAS_ICS else None
-        self.icloud_sync = ICloudSync() if HAS_ICS else None
+        # HAS_ICS solo dice que el modulo se pudo importar. La dependencia real
+        # (icalendar) se comprueba al construir el parser, y ahi una ImportError
+        # tumbaba la app entera al arrancar: un calendario opcional no puede
+        # impedir abrir las tareas.
+        self.ics_sync = None
+        self.icloud_sync = None
+        if HAS_ICS:
+            try:
+                self.ics_sync = UnifiedCalendarSync()
+                self.icloud_sync = ICloudSync()
+            except Exception as error:
+                print(f"Sincronizacion de calendario no disponible: {error}",
+                      file=sys.stderr)
         
         # Run initial sync in background to avoid blocking startup
         import threading
         threading.Thread(target=self._initial_sync_and_ics, daemon=True).start()
         
         # Auto-refresh timer (every 15 minutes)
-        if HAS_ICS:
+        if self.ics_sync:
             self._start_refresh_timer()
             
     def _initial_sync_and_ics(self):
@@ -228,7 +239,8 @@ class TaskManager:
         task_id = db.add_task(title, category, description, status, priority, deadline, tags=tags)
         
         try:
-            self.obsidian.add_task(title, category, status, deadline, priority)
+            self.obsidian.add_task(title, category, status, deadline, priority,
+                                   description)
         except Exception:
             pass
         
@@ -459,6 +471,10 @@ class TaskManager:
     def get_monthly_stats(self) -> Dict:
         """Get monthly statistics"""
         return db.get_monthly_stats()
+
+    def get_alltime_stats(self) -> Dict:
+        """Get all-time statistics"""
+        return db.get_alltime_stats()
     
     def get_daily_stats(self, date: str) -> Dict:
         """Get daily statistics"""

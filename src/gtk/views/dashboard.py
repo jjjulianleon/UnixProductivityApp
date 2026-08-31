@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
+from src.gtk.widgets.common import empty_state, fill_empty, reset_list
 
 
 class DashboardView(Gtk.Box):
@@ -56,7 +57,7 @@ class DashboardView(Gtk.Box):
         sync_box.set_valign(Gtk.Align.CENTER)
 
         self.sync_btn = Gtk.Button()
-        self.sync_btn.set_icon_name("emblem-synchronizing-symbolic")
+        self.sync_btn.set_icon_name("view-refresh-symbolic")
         self.sync_btn.add_css_class("circular")
         self.sync_btn.set_tooltip_text("Sincronizar Brightspace D2L")
         self.sync_btn.connect("clicked", self._on_sync_clicked)
@@ -84,7 +85,7 @@ class DashboardView(Gtk.Box):
         self.overdue_stat = self._create_stat_card("Atrasadas", "0", "dialog-warning-symbolic")
         stats_box.append(self.overdue_stat)
         
-        self.completed_stat = self._create_stat_card("Completadas", "0", "emblem-ok-symbolic")
+        self.completed_stat = self._create_stat_card("Completadas", "0", "object-select-symbolic")
         stats_box.append(self.completed_stat)
         
         self.append(stats_box)
@@ -239,13 +240,11 @@ class DashboardView(Gtk.Box):
         upcoming = task_manager.get_upcoming_tasks(7)
         
         if not upcoming:
-            empty = Adw.StatusPage()
-            empty.set_icon_name("checkbox-checked-symbolic")
-            empty.set_title("¡Sin tareas urgentes!")
-            empty.set_description("Disfruta tu día")
-            self.urgent_tasks_list.append(empty)
+            fill_empty(self.urgent_tasks_list, "checkbox-checked-symbolic",
+                       "¡Sin tareas urgentes!", "Disfruta tu día")
             return
-            
+
+        reset_list(self.urgent_tasks_list)
         for task in upcoming[:5]:  # Show max 5
             row = self._create_task_row(task)
             self.urgent_tasks_list.append(row)
@@ -305,13 +304,11 @@ class DashboardView(Gtk.Box):
         events = task_manager.get_schedule_events(today_weekday)
         
         if not events:
-            empty = Adw.StatusPage()
-            empty.set_icon_name("weather-clear-symbolic")
-            empty.set_title("Sin eventos hoy")
-            empty.set_description("Tu día está libre")
-            self.schedule_list.append(empty)
+            fill_empty(self.schedule_list, "weather-clear-symbolic",
+                       "Sin eventos hoy", "Tu día está libre")
             return
-            
+
+        reset_list(self.schedule_list)
         for event in events:
             row = Adw.ActionRow()
             row.set_title(event.get('title', ''))

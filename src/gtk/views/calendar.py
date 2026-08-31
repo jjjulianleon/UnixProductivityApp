@@ -178,18 +178,8 @@ class CalendarView(Gtk.Box):
         day_label.set_valign(Gtk.Align.CENTER)
         
         if is_today:
-            # Translucent circle for today
             day_label.set_size_request(32, 32)
-            css = Gtk.CssProvider()
-            css.load_from_data(b"""
-                label {
-                    background: alpha(@accent_color, 0.3);
-                    border-radius: 50%;
-                    font-weight: bold;
-                    padding: 6px;
-                }
-            """)
-            day_label.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            day_label.add_css_class("calendar-today")
         
         container.append(day_label)
         
@@ -197,9 +187,7 @@ class CalendarView(Gtk.Box):
         if has_deadline:
             dot = Gtk.Label(label="●")
             dot.set_halign(Gtk.Align.CENTER)
-            css = Gtk.CssProvider()
-            css.load_from_data(b"label { color: #ea4335; font-size: 6px; }")
-            dot.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            dot.add_css_class("deadline-dot")
             container.append(dot)
         else:
             spacer = Gtk.Label(label=" ")

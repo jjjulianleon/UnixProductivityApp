@@ -5,10 +5,9 @@
 | Aspecto | Tecnología |
 |---------|------------|
 | Lenguaje | Python 3.13 |
-| UI Principal | GTK4 + Libadwaita |
-| UI Alternativa | PyQt6 |
+| UI | GTK4 + Libadwaita (unica; la implementacion PyQt6 se elimino) |
 | Base de Datos | SQLite3 |
-| Plataforma | Linux (Fedora/GNOME/KDE) |
+| Plataformas | Linux (Fedora/GNOME/KDE) y macOS 12+ |
 
 ---
 

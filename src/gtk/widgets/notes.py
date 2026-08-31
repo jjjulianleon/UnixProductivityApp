@@ -9,9 +9,18 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, GLib, GObject
 from pathlib import Path
 import os
+import sys
 
-# Obsidian vault path
-OBSIDIAN_NOTES_PATH = Path("/home/jjulianleon/Documents/Obsidian/Rough Notes")
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from src.utils.constants import OBSIDIAN_ROUGH_NOTES as OBSIDIAN_NOTES_PATH
+
+
+def _short_path(path: Path) -> str:
+    """~/…/Rough Notes en vez de la ruta absoluta entera"""
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 class NoteDetailDialog(Adw.Window):
@@ -181,23 +190,22 @@ class QuickNotes(Gtk.Box):
         # Header
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         
-        title = Gtk.Label(label="Rough Notes")
-        title.add_css_class("title-2")
-        title.set_halign(Gtk.Align.START)
-        title.set_hexpand(True)
-        header.append(title)
-        
-        # Path indicator
-        path_label = Gtk.Label(label=str(OBSIDIAN_NOTES_PATH))
+        # Ruta del vault abreviada: la completa va en el tooltip, no ocupando
+        # media cabecera.
+        path_label = Gtk.Label(label=_short_path(OBSIDIAN_NOTES_PATH))
         path_label.add_css_class("dim-label")
         path_label.add_css_class("caption")
         path_label.set_ellipsize(3)
+        path_label.set_halign(Gtk.Align.START)
+        path_label.set_hexpand(True)
+        path_label.set_tooltip_text(str(OBSIDIAN_NOTES_PATH))
         header.append(path_label)
-        
+
         add_btn = Gtk.Button()
         add_btn.set_icon_name("list-add-symbolic")
-        add_btn.add_css_class("suggested-action")
+        add_btn.add_css_class("flat")
         add_btn.add_css_class("circular")
+        add_btn.set_tooltip_text("Nueva nota")
         add_btn.set_margin_start(12)
         add_btn.connect("clicked", self._on_add_note)
         header.append(add_btn)
@@ -206,6 +214,7 @@ class QuickNotes(Gtk.Box):
         refresh_btn.set_icon_name("view-refresh-symbolic")
         refresh_btn.add_css_class("flat")
         refresh_btn.add_css_class("circular")
+        refresh_btn.set_tooltip_text("Recargar desde el vault")
         refresh_btn.connect("clicked", lambda _: self.refresh())
         header.append(refresh_btn)
         
@@ -224,8 +233,20 @@ class QuickNotes(Gtk.Box):
         self.notes_flow.set_column_spacing(12)
         self.notes_flow.set_row_spacing(12)
         scroll.set_child(self.notes_flow)
-        
-        self.append(scroll)
+
+        self.empty_page = Adw.StatusPage()
+        self.empty_page.set_icon_name("text-editor-symbolic")
+        self.empty_page.set_title("Sin notas")
+        self.empty_page.set_description(f"Crea notas en {_short_path(OBSIDIAN_NOTES_PATH)}")
+
+        # Stack en vez de meter el estado vacio como hijo del FlowBox, donde
+        # heredaba el ancho de una columna.
+        self.body = Gtk.Stack()
+        self.body.set_vexpand(True)
+        self.body.add_named(scroll, "list")
+        self.body.add_named(self.empty_page, "empty")
+
+        self.append(self.body)
         
     def _on_add_note(self, btn):
         dialog = NoteDetailDialog(parent=self.get_root())
@@ -256,13 +277,11 @@ class QuickNotes(Gtk.Box):
         notes.sort(key=lambda n: n['modified'], reverse=True)
         
         if not notes:
-            empty = Adw.StatusPage()
-            empty.set_icon_name("accessories-text-editor-symbolic")
-            empty.set_title("Sin notas")
-            empty.set_description(f"Crea notas en\n{OBSIDIAN_NOTES_PATH}")
-            self.notes_flow.append(empty)
+            self.body.set_visible_child_name("empty")
             return
-            
+
+        self.body.set_visible_child_name("list")
+
         for note in notes:
             card = self._create_note_card(note)
             self.notes_flow.append(card)

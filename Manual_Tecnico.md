@@ -50,7 +50,6 @@ La finalidad de este manual es asegurar la correcta implementacion y continuidad
 |------------|------------|---------|
 | Lenguaje de programacion | Python | 3.13 |
 | Framework GUI principal | GTK4 + Libadwaita | 4.0+ / 1.x |
-| Framework GUI legacy | PyQt6 | 6.4+ |
 | Widget KDE | QML (Qt Quick) | 6.0+ |
 | Base de datos | SQLite | 3.x (embebida en Python) |
 | Protocolo de calendario | CalDAV / ICS (RFC 5545) | - |
@@ -132,7 +131,7 @@ graph TB
     M --> K
     M --> L
     H <--> N
-    F -->|notify-send| P[Sistema de Notificaciones Linux]
+    F -->|notify-send / osascript| P[Notificaciones del SO]
 ```
 
 ### Diagrama de Flujo de Datos
@@ -147,13 +146,12 @@ sequenceDiagram
     participant O as ObsidianSync
 
     U->>V: Crea tarea
-    V->>S: Emite task_added
-    S->>T: Propaga senal
+    V->>T: task_manager.add_task(...)
     T->>DB: INSERT INTO tasks
-    T->>O: Escribe en archivo .md
+    T->>O: Escribe la linea "- [ ] ..." en el .md
     O-->>T: Confirmacion
-    T->>S: Emite tasks_reloaded
-    S->>V: Propaga a todas las vistas
+    T->>S: Emite task_added
+    S->>V: MainWindow.refresh_views()
     V-->>U: UI actualizada
 ```
 
@@ -214,13 +212,14 @@ sequenceDiagram
 - Fedora Linux 41+ (recomendado)
 - Ubuntu 22.04+
 - Cualquier distribucion Linux con GTK4 4.0+ y Libadwaita 1.x
+- macOS 12+ (Apple Silicon o Intel) con Homebrew
 
 **Dependencias:**
 - Python 3.10+ (3.13 recomendado)
 - GTK4 >= 4.0
 - Libadwaita >= 1.0
 - PyGObject >= 3.42.0
-- Fuente: Source Code Pro (recomendada)
+- Fuente: la del sistema (se puede cambiar en Configuracion)
 
 ### Infraestructura Requerida
 
@@ -284,6 +283,56 @@ unidex        # Debe abrir la aplicacion principal
 unidex-widget # Debe mostrar el widget en el escritorio
 ```
 
+### Instalacion en macOS
+
+macOS 12+ ejecuta el mismo codigo GTK4/Libadwaita; el stack nativo se obtiene de Homebrew y la distribucion se empaqueta como bundles `.app`.
+
+```bash
+chmod +x install_macos.sh
+./install_macos.sh
+```
+
+El script realiza las siguientes operaciones:
+1. Verifica Homebrew e instala `gtk4`, `libadwaita`, `pygobject3`, `adwaita-icon-theme` y `librsvg`.
+2. Construye `/Applications/UniDex.app` y `/Applications/UniDex Widget.app` con la estructura `Contents/{MacOS,Resources}` e `Info.plist`.
+3. Copia `src/`, `assets/`, los scripts Python y los feeds ICS a `Contents/Resources/`.
+4. Genera el icono `AppIcon.icns` desde `assets/app_icon.svg` con `rsvg-convert` + `iconutil`.
+5. Crea un venv `--system-site-packages` por bundle e instala `requirements_macos.txt` (GTK viene de Homebrew, no de pip).
+6. Escribe el lanzador `Contents/MacOS/<App>` exportando `XDG_DATA_DIRS` y `GSETTINGS_SCHEMA_DIR` hacia el prefijo de Homebrew.
+7. Solo con `--autostart`, registra el LaunchAgent `~/Library/LaunchAgents/com.jjjulianleon.unidex.widget.plist`; sin ese flag lo elimina y el widget queda de apertura manual.
+
+Desinstalacion: `./uninstall_macos.sh` (elimina bundles y LaunchAgent, conserva los datos).
+
+**Capa de compatibilidad multiplataforma**
+
+Todo lo dependiente del sistema operativo esta aislado en `src/utils/system.py`:
+
+| Funcion | Linux | macOS |
+|---------|-------|-------|
+| `data_dir()` | `$XDG_DATA_HOME` o `~/.local/share` | `~/Library/Application Support` |
+| `config_dir()` | `$XDG_CONFIG_HOME` o `~/.config` | `~/Library/Application Support` |
+| `open_path()` | `xdg-open` | `open` |
+| `notify()` | `notify-send` | `osascript` (display notification) |
+| `obsidian_vault()` | `~/Documents/Obsidian` | iCloud Drive de Obsidian, si existe |
+
+La variable de entorno `UNIDEX_OBSIDIAN_VAULT` sobreescribe la deteccion del vault en ambas plataformas.
+
+**Adaptaciones de interfaz para macOS**
+
+| Ajuste | Motivo |
+|--------|--------|
+| Franja de 28 px libre arriba del sidebar (`.macos-titlebar-spacer`) | macOS dibuja los botones semaforo sobre la esquina superior izquierda de la ventana |
+| `src/gtk/styles/macos.css` sobre `style.css` | Ventana opaca (macOS no expone vibrancy a GTK), sidebar y seleccion al estilo Finder, scrollbars finas |
+| `accel()` en `main_gtk.py` usa `<Meta>` | GTK4 define `<Primary>` como Control en todas las plataformas; Command requiere `<Meta>` |
+| Acciones `app.backup/export/import/about/settings/close-window` | El menu declaraba acciones inexistentes; ahora estan implementadas con `Gtk.FileDialog` y `Adw.AboutDialog` |
+| Tamaño de ventana persistido en `settings` | Comportamiento esperado de una app de escritorio nativa |
+
+La cobertura de estas piezas esta en `tests/test_app_actions.py` (se omite sin sesion grafica).
+
+**Limitaciones conocidas en macOS**
+- El plasmoide (`plasmoid/`, `plasmoid_backend.py`) es exclusivo de KDE Plasma; su equivalente es la ventana flotante `UniDex Widget.app`.
+- La barra de menu del sistema muestra el nombre del interprete de Python en lugar de "UniDex" (limitacion de PyGObject al lanzarse via script); el Dock y Spotlight si usan el nombre e icono del bundle.
+
 ### Parametros de Configuracion
 
 **Configuracion de la aplicacion (tabla `settings` en SQLite):**
@@ -313,7 +362,7 @@ unidex-widget # Debe mostrar el widget en el escritorio
 | `SCHEDULE_END_HOUR` | Hora fin del horario | `22` |
 | `NOTIFICATION_THRESHOLDS` | Dias antes del deadline para alertas | `[0, 1, 3]` |
 
-**Rutas del sistema:**
+**Rutas del sistema** (en macOS la base es `~/Library/Application Support/` en lugar de `~/.local/share/` y `~/.config/`, resuelta por `src/utils/system.py`):
 
 | Ruta | Contenido |
 |------|-----------|
@@ -481,6 +530,30 @@ Tipos de commit:
 - `docs`: Documentacion
 - `test`: Tests
 
+### Formato de tareas en Obsidian
+
+Una tarea es una linea `- [ ]` y, opcionalmente, lineas indentadas debajo con su
+descripcion:
+
+```markdown
+- [ ] Titulo [deadline: 2026-01-31] [priority: alta] (en progreso)
+  Primera linea de la descripcion
+  Segunda linea
+```
+
+`ObsidianSync` concentra el formato en cuatro metodos, y **cualquier cambio debe
+tocar los cuatro a la vez** para que sigan siendo simetricos:
+
+| Metodo | Responsabilidad |
+|--------|-----------------|
+| `_parse_task_line()` | Una linea `- [ ]` -> dict con titulo y metadatos |
+| `_take_description_block()` | Consume las lineas indentadas que la siguen |
+| `_task_line()` | dict -> la linea `- [ ]` |
+| `_task_block()` | dict -> la linea mas su descripcion indentada |
+
+Leer, anadir, actualizar y borrar pasan todos por ahi. Se mantiene la lectura del
+formato antiguo de una sola linea (`- [ ] Titulo | Descripcion`).
+
 ### Estandares de Calendario
 
 - **RFC 5545 (iCalendar):** Formato utilizado para importacion/exportacion de eventos.
@@ -488,17 +561,25 @@ Tipos de commit:
 
 ### Testing
 
-- **Framework:** unittest (libreria estandar de Python)
-- **Tests existentes:** 43 tests unitarios en 3 archivos
+- **Framework:** unittest (libreria estandar de Python; no hace falta pytest)
+- **Tests existentes:** 46 tests en 5 archivos
   - `tests/test_database.py`: Operaciones CRUD, consultas, backups, exportaciones
-  - `tests/test_obsidian_sync.py`: Sincronizacion con archivos Markdown
+  - `tests/test_obsidian_sync.py`: Formato markdown y edicion de tareas concretas
   - `tests/test_ics_integration_flow.py`: Parseo ICS y flujo de sincronizacion
+  - `tests/test_app_actions.py`: Acciones, aceleradores y navegacion (se omite sin display)
+  - `tests/test_icons.py`: Todo nombre de icono del codigo existe en el tema
 
 **Ejecutar tests:**
 ```bash
 cd CalendarWidget
-python -m pytest tests/ -v
+python -m unittest discover -s tests
 ```
+
+**Regla:** ningun test puede tocar la base de datos ni el vault de Obsidian
+reales. `Database(":memory:")` y
+`ObsidianSync(vault_paths=..., rough_notes_folder=...)` aceptan rutas inyectadas
+para eso. Una variable de entorno no basta: `constants.py` resuelve las rutas al
+importarse, y el orden de imports entre modulos de test no esta garantizado.
 
 ---
 
@@ -705,31 +786,33 @@ CalendarWidget/
 ├── teams_integration.py           # Integracion Microsoft Teams (Graph API)
 ├── icloud_integration.py          # Integracion iCloud Calendar (CalDAV)
 ├── ics_integration.py             # Orquestador unificado de feeds ICS
-├── install.sh                     # Script de instalacion para Fedora/GNOME
+├── install.sh                     # Instalacion en Linux
+├── install_macos.sh               # Construye UniDex.app y UniDex Widget.app
+├── uninstall.sh / uninstall_macos.sh
 ├── install_plasmoid_direct.sh     # Instalador de widget KDE Plasma
-├── uninstall.sh                   # Script de desinstalacion
 ├── package_plasmoid.sh            # Empaquetador del plasmoid
-├── requirements.txt               # Dependencias PyQt6 (legacy)
-├── requirements_gtk.txt           # Dependencias GTK4 (activas)
+├── requirements_gtk.txt           # Dependencias en Linux
+├── requirements_macos.txt         # Dependencias en macOS
 ├── README.md                      # Documentacion de usuario
-├── Documentacion.md               # Documentacion tecnica previa
+├── Manual_Usuario.md              # Manual de usuario
+├── Documentacion.md               # Documentacion tecnica complementaria
 ├── migracion_futura.md            # Roadmap de migracion a Flutter
-├── .gitignore                     # Exclusiones de Git
 │
 ├── src/                           # Codigo fuente principal
-│   ├── __init__.py
-│   │
-│   ├── core/                      # Logica de negocio
-│   │   ├── __init__.py
-│   │   ├── database.py            # Singleton SQLite con migraciones
-│   │   ├── task_manager.py        # CRUD de tareas y notas
-│   │   ├── obsidian_sync.py       # Sincronizacion bidireccional Obsidian
-│   │   ├── auto_sync.py           # Sincronizacion automatica en background
-│   │   ├── notifications.py       # Notificaciones de escritorio (notify-send)
+│   ├── core/                      # Logica de negocio (sin nada de UI)
+│   │   ├── database.py            # Singleton SQLite; acepta ruta para tests
+│   │   ├── task_manager.py        # CRUD de tareas y fachada de integraciones
+│   │   ├── obsidian_sync.py       # Sincronizacion Obsidian; rutas inyectables
+│   │   ├── auto_sync.py           # Sincronizacion periodica en background
+│   │   ├── notifications.py       # Recordatorios de fechas limite
 │   │   └── signals.py             # Hub central de senales (GenericSignal)
 │   │
 │   ├── gtk/                       # Implementacion GTK4
-│   │   ├── window.py              # Ventana principal con sidebar
+│   │   ├── __init__.py            # init_theme(): CSS, iconos y fuente
+│   │   ├── window.py              # Ventana principal (NavigationSplitView)
+│   │   ├── styles/
+│   │   │   ├── style.css          # Hoja unica, compartida con el widget
+│   │   │   └── macos.css          # Ajustes de aspecto nativo en macOS
 │   │   ├── views/
 │   │   │   ├── dashboard.py       # Vista Dashboard
 │   │   │   ├── tasks.py           # Vista de tareas
@@ -740,19 +823,15 @@ CalendarWidget/
 │   │   │   ├── pomodoro.py        # Temporizador Pomodoro
 │   │   │   ├── schedule.py        # Horario semanal
 │   │   │   ├── notes.py           # Notas rapidas
-│   │   │   └── task_detail.py     # Detalle de tarea
+│   │   │   ├── task_detail.py     # Detalle de tarea
+│   │   │   └── common.py          # empty_state(), fill_empty(), reset_list()
 │   │   └── dialogs/
 │   │       ├── add_task.py        # Dialogo de creacion de tareas
 │   │       └── settings.py        # Dialogo de configuracion
 │   │
-│   ├── ui/                        # Implementacion PyQt6 (legacy)
-│   │   ├── widgets/
-│   │   ├── dialogs/
-│   │   └── views/
-│   │
 │   └── utils/                     # Utilidades compartidas
-│       ├── constants.py           # Constantes y configuracion global
-│       └── styles.py              # Tema glassmorphism y paleta de colores
+│       ├── system.py              # Capa de plataforma (rutas, notificaciones)
+│       └── constants.py           # Constantes y configuracion global
 │
 ├── plasmoid/                      # Widget KDE Plasma
 │   └── package/
@@ -761,19 +840,18 @@ CalendarWidget/
 │           ├── main.qml           # Interfaz QML del widget
 │           └── ConfigGeneral.qml  # Pagina de configuracion
 │
-├── tests/                         # Tests unitarios
-│   ├── test_database.py           # 43 tests de operaciones de DB
-│   ├── test_obsidian_sync.py      # Tests de sincronizacion Obsidian
-│   └── test_ics_integration_flow.py # Tests de integracion ICS
+├── tests/                         # 46 tests
+│   ├── test_database.py           # Operaciones de base de datos
+│   ├── test_obsidian_sync.py      # Formato markdown y edicion de tareas
+│   ├── test_ics_integration_flow.py # Flujo de sincronizacion ICS
+│   ├── test_app_actions.py        # Acciones, atajos y navegacion (necesita display)
+│   └── test_icons.py              # Todos los iconos existen en el tema
 │
-├── assets/                        # Recursos graficos
-│   ├── app_icon.svg               # Icono de la aplicacion (SVG)
-│   └── icons/                     # Iconos adicionales
+├── assets/
+│   ├── app_icon.svg               # Icono de la aplicacion
+│   └── icons/hicolor/scalable/actions/  # Iconos simbolicos propios
 │
 ├── .devcontainer/                 # Configuracion de Dev Container
-│   ├── devcontainer.json          # Config VS Code Remote Containers
-│   └── Dockerfile                 # Imagen Docker para desarrollo
-│
 └── resources/                     # Recursos adicionales (archivos ICS)
 ```
 
@@ -787,14 +865,18 @@ CalendarWidget/
 | `ValueError: Namespace Gtk not available` | GTK4 no instalado | Ejecutar: `sudo dnf install gtk4-devel` (Fedora) o `sudo apt install libgtk-4-dev` (Ubuntu) |
 | `ValueError: Namespace Adw not available` | Libadwaita no instalada | Ejecutar: `sudo dnf install libadwaita-devel` (Fedora) o `sudo apt install libadwaita-1-dev` (Ubuntu) |
 | Widget no aparece al iniciar sesion | Archivo de autostart eliminado o corrupto | Verificar existencia de `~/.config/autostart/unidex-widget.desktop`. Ejecutar `install.sh` nuevamente si no existe |
-| `QDBusTrayIcon encountered a D-Bus error` | Servicio de bandeja del sistema no disponible | Warning ignorable, no afecta funcionalidad |
-| Fondo blanco en dropdowns (QComboBox) | Bug conocido de Qt en Wayland | Sin solucion definitiva; afecta solo la interfaz legacy PyQt6, no la version GTK4 |
 | Tareas de Obsidian no se sincronizan | Rutas del vault no coinciden con la configuracion | Verificar rutas en `src/utils/constants.py` (`OBSIDIAN_VAULT_PATHS`). Asegurar que los archivos `.md` existan |
 | Error de conexion con Brightspace | URL del feed ICS incorrecta o expirada | Regenerar la URL del feed ICS desde Brightspace > Calendario > Suscribirse |
 | Error de autenticacion iCloud | Contrasena de aplicacion invalida | Generar nueva contrasena en [appleid.apple.com](https://appleid.apple.com) > Seguridad > Contrasenas de aplicacion |
 | Drag-and-drop parpadea en Kanban | Repintado rapido durante animaciones GTK | Comportamiento conocido, no afecta funcionalidad. Mejorado en la version GTK4 |
 | Base de datos corrupta | Cierre inesperado o fallo de disco | Restaurar desde el ultimo backup en `~/.local/share/UniDex/backups/`. Ejecutar `PRAGMA integrity_check` para diagnostico |
 | El plasmoid no muestra datos | Ruta del backend hardcodeada incorrectamente | Verificar que `plasmoid_backend.py` este en `~/.local/share/unidex/` y que la ruta en `main.qml` sea correcta |
+| Un icono sale como cuadro gris | El nombre no existe en el tema Adwaita y GTK no avisa | Ejecutar `python -m unittest tests.test_icons`. Sustituir por un nombre real o anadir el SVG en `assets/icons/hicolor/scalable/actions/` |
+| Los pomodoros de la tarde no cuentan en "hoy" | `CURRENT_TIMESTAMP` de SQLite es UTC y se comparaba con la fecha local | Corregido con `date(started_at, 'localtime')`. Al escribir consultas nuevas sobre fechas, verificar el huso de cada lado |
+| La app no arranca y menciona `icalendar` | Dependencia opcional de calendario ausente | Corregido: la sincronizacion se construye dentro de un `try` y la app abre sin ella. `pip install icalendar` para recuperarla |
+| Una vista no se actualiza tras un cambio | Le falta el metodo `refresh()` | `MainWindow.refresh_views()` solo llama a las vistas que lo tengan |
+| `Gtk-CRITICAL` o cierre inesperado al sincronizar | Una senal emitida desde un hilo de fondo toca widgets GTK | Suscribirse **siempre** con `bind_signals()` (`src/gtk/widgets/common.py`), que marshalea a `GLib.idle_add` y desconecta al destruirse el widget |
+| Editar o borrar una tarea afecta a otras del vault | Comparacion por subcadena en `obsidian_sync` | Corregido: el titulo se compara exacto contra el que devuelve `_parse_task_line()` |
 
 ---
 
@@ -806,9 +888,11 @@ CalendarWidget/
 |---------|------------|
 | **CalDAV** | Protocolo estandar (RFC 4791) para acceso a calendarios remotos via HTTP/WebDAV |
 | **ICS/iCal** | Formato estandar (RFC 5545) para representar eventos de calendario |
-| **Glassmorphism** | Estilo de diseno visual con fondos semi-transparentes y efecto de cristal |
 | **GTK4** | Toolkit grafico de GNOME para construir interfaces de usuario nativas en Linux |
 | **Libadwaita** | Libreria complementaria a GTK4 que implementa los patrones de diseno GNOME |
+| **NavigationSplitView** | Contenedor de Libadwaita con sidebar y contenido, cada uno con su propia barra de titulo |
+| **ToolbarView** | Contenedor de Libadwaita que combina una barra superior con el contenido de un panel |
+| **Icono simbolico** | SVG monocromo que el tema recolorea segun el estado del widget; su nombre acaba en `-symbolic` |
 | **Kanban** | Metodologia de gestion visual de tareas organizada en columnas de estado |
 | **Plasmoid** | Widget nativo de KDE Plasma, implementado en QML |
 | **Pomodoro** | Tecnica de productividad basada en intervalos de trabajo (25 min) y descanso (5 min) |

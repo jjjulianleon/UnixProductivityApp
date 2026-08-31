@@ -1,8 +1,8 @@
 # UniDex
 
-Aplicacion de productividad para Linux diseñada para KDE Plasma con integracion a Obsidian, calendario estilo Microsoft Teams, gestion de tareas con Kanban y temporizador Pomodoro.
+Aplicacion de productividad para Linux y macOS con integracion a Obsidian, calendario estilo Microsoft Teams, gestion de tareas con Kanban y temporizador Pomodoro.
 
-Desarrollada con Python 3.13 y PyQt6 con un diseno glassmorphism moderno.
+Desarrollada con Python 3.13 y GTK4 + Libadwaita, con aspecto nativo en cada plataforma.
 
 ---
 
@@ -83,10 +83,9 @@ Componentes:
 ## Requisitos
 
 - Python 3.10 o superior (desarrollado con 3.13)
-- PyQt6 >= 6.4.0
+- GTK4 + Libadwaita + PyGObject
 - SQLite (incluido con Python)
-- Sistema operativo: Linux (optimizado para KDE Plasma/Wayland)
-- Fuente: Source Code Pro (recomendada)
+- Sistema operativo: Linux (GNOME/KDE Plasma) o macOS 12+
 
 ### Dependencias de Integraciones
 
@@ -101,13 +100,17 @@ Componentes:
 ### Instalar todas las dependencias
 
 ```bash
-pip install -r requirements.txt
+# Linux
+pip install -r requirements_gtk.txt
+
+# macOS (GTK4 viene de Homebrew, ver install_macos.sh)
+pip install -r requirements_macos.txt
 ```
 
 ### O instalar manualmente
 
 ```bash
-pip install PyQt6>=6.4.0 caldav>=1.2.0 icalendar>=5.0.0 requests>=2.28.0
+pip install PyGObject>=3.42.0 pycairo>=1.20.0 caldav>=1.2.0 icalendar>=5.0.0 requests>=2.28.0
 ```
 
 ### Clonar o descargar el proyecto
@@ -116,6 +119,48 @@ pip install PyQt6>=6.4.0 caldav>=1.2.0 icalendar>=5.0.0 requests>=2.28.0
 cd ~/Desktop
 git clone <repositorio> CalendarWidget
 cd CalendarWidget
+```
+
+### Instalacion en macOS
+
+La app es GTK4 + Libadwaita en ambas plataformas; en macOS el stack GTK viene de Homebrew.
+
+```bash
+./install_macos.sh
+```
+
+El instalador:
+
+1. Instala con Homebrew `gtk4`, `libadwaita`, `pygobject3`, `adwaita-icon-theme` y `librsvg`
+2. Construye `/Applications/UniDex.app` y `/Applications/UniDex Widget.app` (con icono `.icns` generado desde `assets/app_icon.svg`)
+3. Crea un venv `--system-site-packages` dentro de cada bundle con `requirements_macos.txt`
+4. El widget **no** arranca solo; abrelo cuando quieras desde `UniDex Widget.app`. Para que inicie con la sesion: `./install_macos.sh --autostart`
+
+Para desinstalar (conserva tus datos):
+
+```bash
+./uninstall_macos.sh
+```
+
+**Diferencias en macOS**
+
+| Aspecto | Linux | macOS |
+|---------|-------|-------|
+| Datos y config | `~/.local/share/UniDex`, `~/.config/…` | `~/Library/Application Support/…` |
+| Notificaciones | `notify-send` | `osascript` (Centro de Notificaciones) |
+| Abrir archivos | `xdg-open` | `open` |
+| Inicio automatico del widget | `~/.config/autostart` (activo) | LaunchAgent opcional (`--autostart`) |
+| Widget de escritorio | Plasmoide nativo de KDE | Ventana flotante (`UniDex Widget.app`) |
+| Modificador de atajos | Ctrl | ⌘ (Command) |
+| Ventana | Translucida | Opaca (macOS no da vibrancy a GTK) |
+| Barra de titulo | Una por panel (Adwaita) | Igual; los semaforos caen en la del sidebar |
+| Seleccion del sidebar | Relleno tenue de Adwaita | Relleno solido del color de acento, como Finder |
+| Hoja de estilos | `src/gtk/styles/style.css` | + `src/gtk/styles/macos.css` encima |
+
+El vault de Obsidian se detecta automaticamente (iCloud Drive o `~/Documents/Obsidian`). Para forzar otra ruta:
+
+```bash
+export UNIDEX_OBSIDIAN_VAULT="/ruta/a/tu/vault"
 ```
 
 ### Desarrollo con Dev Container (opcional)
@@ -133,20 +178,20 @@ El proyecto incluye configuracion de devcontainer para desarrollo en VS Code:
 ### Ejecutar la aplicacion principal
 
 ```bash
-python main_app.py
+python main_gtk.py
 ```
 
 ### Ejecutar el widget de escritorio
 
 ```bash
-python widget.py
+python widget_gtk.py
 ```
 
 ### Ejecutar ambos
 
 ```bash
-python main_app.py &
-python widget.py &
+python main_gtk.py &
+python widget_gtk.py &
 ```
 
 ---
@@ -155,72 +200,55 @@ python widget.py &
 
 ```
 CalendarWidget/
-|-- main_app.py                 # Punto de entrada de la aplicacion principal (PyQt6)
-|-- main_gtk.py                 # Punto de entrada GTK4/Libadwaita
-|-- widget.py                   # Punto de entrada del widget de escritorio
-|-- widget_gtk.py               # Widget de escritorio GTK4
+|-- main_gtk.py                 # Punto de entrada de la aplicacion (GTK4/Libadwaita)
+|-- widget_gtk.py               # Widget de escritorio
 |-- icloud_integration.py       # Sincronizacion con iCloud Calendar (CalDAV)
 |-- ics_integration.py          # Integracion unificada ICS (Brightspace/Teams)
 |-- teams_integration.py        # Integracion con Microsoft Teams Graph API
 |-- brightspace_integration.py  # Integracion con Brightspace D2L (API)
-|-- requirements.txt            # Dependencias del proyecto
+|-- requirements_gtk.txt        # Dependencias en Linux
+|-- requirements_macos.txt      # Dependencias en macOS
 |-- README.md                   # Este archivo
-|-- Documentacion.md            # Documentacion tecnica completa
-|-- install.sh                  # Script de instalacion
-|
-|-- .devcontainer/              # Configuracion para desarrollo en contenedor
-|   |-- devcontainer.json
-|   |-- Dockerfile
+|-- Manual_Tecnico.md           # Documentacion tecnica
+|-- Manual_Usuario.md           # Manual de usuario
+|-- install.sh                  # Instalacion en Linux
+|-- install_macos.sh            # Construye UniDex.app y UniDex Widget.app
 |
 |-- src/
-|   |-- __init__.py
-|   |
 |   |-- core/
-|   |   |-- __init__.py
 |   |   |-- database.py         # Persistencia SQLite con backup/export
 |   |   |-- task_manager.py     # Operaciones CRUD de tareas
 |   |   |-- obsidian_sync.py    # Sincronizacion bidireccional con Obsidian
-|   |   |-- notifications.py    # Notificaciones de escritorio Linux
-|   |   |-- signals.py          # Hub central de senales PyQt
+|   |   |-- notifications.py    # Recordatorios de fechas limite
+|   |   |-- auto_sync.py        # Sincronizacion periodica en segundo plano
+|   |   |-- signals.py          # Hub central de senales
 |   |
-|   |-- ui/
-|   |   |-- __init__.py
-|   |   |
-|   |   |-- widgets/
-|   |   |   |-- __init__.py
-|   |   |   |-- calendar.py     # Widget de calendario mensual
-|   |   |   |-- schedule.py     # Vista semanal estilo Teams (QPainter)
-|   |   |   |-- kanban.py       # Tablero Kanban con drag and drop
-|   |   |   |-- pomodoro.py     # Temporizador Pomodoro configurable
-|   |   |   |-- quick_notes.py  # Widget de notas rapidas
-|   |   |   |-- common.py       # Componentes compartidos (tarjetas, etc)
-|   |   |
-|   |   |-- dialogs/
-|   |   |   |-- __init__.py
-|   |   |   |-- task_dialogs.py     # Dialogos de tareas y eventos
-|   |   |   |-- settings_dialog.py  # Dialogo de configuracion con tabs
-|   |   |
-|   |   |-- views/
-|   |   |   |-- __init__.py
-|   |   |   |-- dashboard.py        # Vista del dashboard
-|   |   |   |-- tasks_view.py       # Vista de tareas (Kanban completo)
-|   |   |   |-- calendar_view.py    # Vista de calendario
-|   |   |   |-- statistics_view.py  # Vista de estadisticas
+|   |-- gtk/
+|   |   |-- __init__.py         # init_theme(): CSS, iconos y fuente
+|   |   |-- window.py           # Ventana principal (NavigationSplitView)
+|   |   |-- styles/
+|   |   |   |-- style.css       # Tema unico (app y widget)
+|   |   |   |-- macos.css       # Ajustes para que se vea nativa en macOS
+|   |   |-- views/              # Dashboard, tareas, calendario, estadisticas
+|   |   |-- widgets/            # Kanban, Pomodoro, notas, horario, comunes
+|   |   |-- dialogs/            # Nueva tarea, configuracion
 |   |
 |   |-- utils/
-|       |-- __init__.py
-|       |-- styles.py           # Tema glassmorphism y estilos
+|       |-- system.py           # Capa de plataforma (rutas, notificaciones)
 |       |-- constants.py        # Configuracion y constantes
 |
 |-- assets/
-|   |-- icons/                  # Iconos de la aplicacion
 |   |-- app_icon.svg            # Icono principal de la aplicacion
+|   |-- icons/                  # Iconos simbolicos propios de UniDex
 |
-|-- tests/                      # Tests unitarios (43 tests)
+|-- tests/
+|   |-- test_app_actions.py     # Acciones, atajos y navegacion
+|   |-- test_icons.py           # Todos los iconos existen en el tema
 |   |-- test_database.py
 |   |-- test_obsidian_sync.py
+|   |-- test_ics_integration_flow.py
 |
-|-- resources/                  # Recursos adicionales (archivos ICS)
+|-- plasmoid/                   # Plasmoid de KDE (opcional)
 ```
 
 ---
@@ -229,7 +257,7 @@ CalendarWidget/
 
 ### Base de Datos
 
-Ubicacion: `~/.local/share/UniDex/data.db`
+Ubicacion: `~/.local/share/UniDex/data.db` (Linux) o `~/Library/Application Support/UniDex/data.db` (macOS)
 
 Tablas:
 - tasks: Tareas con titulo, descripcion, categoria, estado, prioridad, fecha limite
@@ -243,7 +271,7 @@ Tablas:
 
 ### Backups
 
-Ubicacion: `~/.local/share/UniDex/backups/`
+Ubicacion: subcarpeta `backups/` junto a la base de datos
 
 Formatos de exportacion:
 - JSON
@@ -254,22 +282,21 @@ Formatos de exportacion:
 
 ## Atajos de Teclado
 
-| Atajo   | Accion            |
-|---------|-------------------|
-| Ctrl+1  | Ir a Dashboard    |
-| Ctrl+2  | Ir a Tareas       |
-| Ctrl+3  | Ir a Calendario   |
-| Ctrl+4  | Ir a Notas        |
-| Ctrl+5  | Ir a Estadisticas |
-| Ctrl+N  | Nueva Tarea       |
-| Ctrl+F  | Enfocar Busqueda  |
-| F5      | Refrescar         |
+En macOS se usa ⌘ (Command); en Linux, Ctrl.
+
+| macOS | Linux    | Accion                                    |
+|-------|----------|-------------------------------------------|
+| ⌘1-⌘8 | Ctrl+1-8 | Dashboard, Tareas, Kanban, Calendario, Horario, Pomodoro, Notas, Estadisticas |
+| ⌘N    | Ctrl+N   | Nueva tarea                               |
+| ⌘,    | Ctrl+,   | Configuracion                             |
+| ⌘W    | Ctrl+W   | Cerrar ventana                            |
+| ⌘Q    | Ctrl+Q   | Salir                                     |
 
 ---
 
 ## Configuracion del Widget
 
-1. Ejecutar el widget: `python widget.py`
+1. Ejecutar el widget: `python widget_gtk.py`
 2. Posicionar el widget arrastrando
 3. Para autostart, crear archivo en `~/.config/autostart/`:
 
@@ -290,9 +317,12 @@ X-KDE-autostart-after=panel
 
 ### Rutas de sincronizacion configuradas
 
-- Personal: `~/Documents/Obsidian/Personal/Pendientes Personal.md`
-- Universidad: `~/Documents/Obsidian/Universidad/8vo Semestre/Pendientes Universidad.md`
-- Fedora: `~/Documents/Obsidian/Pendientes Fedora.md`
+Relativas al vault detectado (`$UNIDEX_OBSIDIAN_VAULT`, iCloud Drive en macOS, o `~/Documents/Obsidian`):
+
+- Personal: `Personal/Pendientes Personal.md`
+- Universidad: `Universidad/8vo Semestre/Pendientes Universidad.md`
+- Fedora: `Pendientes Fedora.md`
+- Pasantias: `Pasantías/Pendientes Pasantía.md`
 
 ### Notas rapidas
 

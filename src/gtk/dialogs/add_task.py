@@ -96,7 +96,7 @@ class AddTaskDialog(Adw.Window):
         self.deadline_row.set_subtitle("Sin fecha")
         
         date_btn = Gtk.Button()
-        date_btn.set_icon_name("month-symbolic")
+        date_btn.set_icon_name("x-office-calendar-symbolic")
         date_btn.set_valign(Gtk.Align.CENTER)
         date_btn.connect("clicked", self._show_date_picker)
         self.deadline_row.add_suffix(date_btn)
@@ -201,7 +201,7 @@ class AddTaskDialog(Adw.Window):
             
     def _save_to_obsidian_pasantias(self, title: str):
         """Append task to Obsidian Pasantías .md file"""
-        PASANTIAS_MD_PATH = Path("/home/jjulianleon/Documents/Obsidian/Pasantías/Pendientes Pasantía.md")
+        from src.utils.constants import OBSIDIAN_PASANTIAS as PASANTIAS_MD_PATH
         try:
             if not PASANTIAS_MD_PATH.parent.exists():
                 PASANTIAS_MD_PATH.parent.mkdir(parents=True, exist_ok=True)

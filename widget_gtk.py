@@ -16,6 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from src.core.task_manager import task_manager
 from src.core.database import db
+from src.gtk import init_theme
+from src.utils.system import IS_MAC
 
 # Semester configuration
 SEMESTER_START = datetime(2026, 1, 12)
@@ -33,108 +35,8 @@ class WidgetApp(Adw.Application):
         self.window.present()
         
     def _load_css(self):
-        css = Gtk.CssProvider()
-        css.load_from_data(b"""
-            window.widget-window {
-                background-color: alpha(@window_bg_color, 0.78);
-            }
-            
-            .glass-card {
-                background-color: alpha(@card_bg_color, 0.5);
-                border-radius: 10px;
-                padding: 10px;
-            }
-            
-            .stat-mini {
-                font-size: 18px;
-                font-weight: bold;
-            }
-            
-            .today-highlight {
-                background-color: alpha(@accent_color, 0.3);
-                border-radius: 50%;
-                font-weight: bold;
-                min-width: 22px;
-                min-height: 22px;
-            }
-            
-            .deadline-dot { color: #ea4335; font-size: 5px; }
-            
-            .priority-alta { border-left: 3px solid #ea4335; }
-            .priority-media { border-left: 3px solid #fbbc05; }
-            .priority-baja { border-left: 3px solid #34a853; }
-            
-            .pomodoro-time {
-                font-size: 28px;
-                font-weight: bold;
-                font-family: monospace;
-            }
-            
-            .urgent-card {
-                background-color: alpha(#ea4335, 0.15);
-                border-radius: 8px;
-                padding: 8px;
-                border-left: 3px solid #ea4335;
-            }
-            
-            .next-class-card {
-                background-color: alpha(@accent_color, 0.15);
-                border-radius: 8px;
-                padding: 8px;
-            }
-            
-            .progress-bar {
-                min-height: 6px;
-                border-radius: 3px;
-            }
-            
-            .progress-bar > trough {
-                background-color: alpha(white, 0.1);
-                border-radius: 3px;
-            }
-            
-            .progress-bar > trough > progress {
-                background-color: @accent_color;
-                border-radius: 3px;
-            }
-            .translucent-btn {
-                background-color: alpha(@accent_color, 0.5);
-                color: white;
-                border: none;
-                box-shadow: none;
-            }
-            
-            .translucent-btn:hover {
-                background-color: alpha(@accent_color, 0.7);
-            }
-        """)
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
-        
-        # Load saved font
-        self._load_font()
-        
-    def _load_font(self):
-        try:
-            fonts = [
-                "",  # System default
-                "'Source Code Pro'",
-                "'Inter'",
-                "'Roboto'",
-                "'Ubuntu'",
-                "'Fira Code'"
-            ]
-            saved_font_idx = task_manager.get_setting('app_font', 0)
-            if saved_font_idx and saved_font_idx > 0 and saved_font_idx < len(fonts):
-                font_family = fonts[saved_font_idx]
-                css = Gtk.CssProvider()
-                css.load_from_data(f"* {{ font-family: {font_family}, sans-serif; }}".encode())
-                Gtk.StyleContext.add_provider_for_display(
-                    Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                )
-        except Exception as e:
-            print(f"Font loading error: {e}")
+        """Mismo tema que la app principal: una sola hoja, no una copia."""
+        init_theme()
 
 
 class WidgetWindow(Adw.ApplicationWindow):
@@ -154,7 +56,9 @@ class WidgetWindow(Adw.ApplicationWindow):
         
     def _setup_ui(self):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        main_box.set_margin_top(10)
+        # En macOS los botones semaforo se dibujan sobre la esquina superior
+        # izquierda: se deja espacio para que no tapen el contenido.
+        main_box.set_margin_top(34 if IS_MAC else 10)
         main_box.set_margin_bottom(10)
         main_box.set_margin_start(10)
         main_box.set_margin_end(10)
@@ -232,31 +136,32 @@ class WidgetWindow(Adw.ApplicationWindow):
         
         # Pending
         self.pending_label = self._create_stat_box(
-            str(stats['pending']), "pendientes", "#4285f4"
+            str(stats['pending']), "pendientes", "accent"
         )
         row.append(self.pending_label)
         
         # Today
         self.today_label = self._create_stat_box(
-            str(stats['today']), "hoy", "#fbbc05"
+            str(stats['today']), "hoy", "warning"
         )
         row.append(self.today_label)
         
         # Overdue
         self.overdue_label = self._create_stat_box(
-            str(stats['overdue']), "atrasadas", "#ea4335"
+            str(stats['overdue']), "atrasadas", "error"
         )
         row.append(self.overdue_label)
         
         # Completed
         self.completed_label = self._create_stat_box(
-            str(stats['completed_today']), "completadas", "#34a853"
+            str(stats['completed_today']), "completadas", "success"
         )
         row.append(self.completed_label)
         
         return row
         
-    def _create_stat_box(self, value: str, label: str, color: str) -> Gtk.Box:
+    def _create_stat_box(self, value: str, label: str, style: str) -> Gtk.Box:
+        """style: clase de Adwaita (accent / warning / error / success)"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.add_css_class("glass-card")
         box.set_hexpand(True)
@@ -264,9 +169,7 @@ class WidgetWindow(Adw.ApplicationWindow):
         
         val_lbl = Gtk.Label(label=value)
         val_lbl.add_css_class("stat-mini")
-        css = Gtk.CssProvider()
-        css.load_from_data(f"label {{ color: {color}; }}".encode())
-        val_lbl.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        val_lbl.add_css_class(style)
         box.append(val_lbl)
         
         txt_lbl = Gtk.Label(label=label)

@@ -1,108 +1,145 @@
-/* UniDex - GTK4 Theme with Translucency */
+/* =============================================================================
+   UniDex - Tema GTK4 / Libadwaita
+   Hoja unica: la usan tanto la app principal como el widget.
+   Regla: nada de colores fijos para claro/oscuro. Todo sale de los colores
+   nombrados de Adwaita (@window_bg_color, @card_bg_color...) o de
+   alpha(currentColor, x), que sigue al texto y por tanto al tema activo.
+   ============================================================================= */
 
-/* ============== TRANSLUCENCY ============== */
+/* ============== ACENTO ==============
+   Contrato de Adwaita: _bg_color es el relleno solido, _fg_color el texto
+   encima, y accent_color el acento usado como texto sobre el fondo de ventana
+   (por eso es un azul algo mas oscuro: tiene que contrastar tambien en claro). */
+@define-color accent_bg_color #4285f4;
+@define-color accent_fg_color #ffffff;
+@define-color accent_color #1a73e8;
+
+@define-color success_color #34a853;
+@define-color warning_color #f9ab00;
+@define-color danger_color #ea4335;
+
+/* ============== VENTANAS ============== */
 window.main-window {
   background-color: alpha(@window_bg_color, 0.88);
 }
 
-/* Widget mode - more transparency */
-window.widget-mode {
-  background-color: alpha(@window_bg_color, 0.75);
+window.widget-window {
+  background-color: alpha(@window_bg_color, 0.78);
 }
 
-/* ============== COLORS ============== */
-@define-color accent_color #4285f4;
-@define-color accent_bg_color alpha(#4285f4, 0.15);
-@define-color success_color #34a853;
-@define-color warning_color #fbbc05;
-@define-color danger_color #ea4335;
-
-/* ============== BUTTONS ============== */
-button.suggested-action {
-  background-color: alpha(@accent_color, 0.3);
-  color: @accent_color;
-}
-
-button.suggested-action:hover {
-  background-color: alpha(@accent_color, 0.45);
-}
-
-/* ============== CARDS ============== */
+/* ============== TARJETAS ============== */
 .glass-card {
   background-color: alpha(@card_bg_color, 0.6);
   border-radius: 12px;
   padding: 12px;
-  border: 1px solid alpha(white, 0.08);
+  border: 1px solid alpha(currentColor, 0.08);
 }
 
 .glass-card:hover {
-  background-color: alpha(@card_bg_color, 0.7);
+  background-color: alpha(@card_bg_color, 0.75);
 }
 
-/* ============== SIDEBAR ============== */
-.sidebar {
-  background-color: alpha(@headerbar_bg_color, 0.95);
-  border-right: 1px solid alpha(white, 0.05);
-}
-
-.sidebar-button {
-  padding: 12px 16px;
+/* ============== SIDEBAR ==============
+   .navigation-sidebar ya trae de Adwaita el fondo, el hover y la seleccion.
+   Aqui solo va lo que Adwaita no cubre. */
+.navigation-sidebar > row {
+  padding: 8px 12px;
   border-radius: 8px;
-  margin: 2px 8px;
 }
 
-.sidebar-button:hover {
-  background-color: alpha(white, 0.08);
+.sidebar-footer-button {
+  padding: 8px 12px;
+  border-radius: 8px;
 }
 
-.sidebar-button:checked {
-  background-color: @accent_bg_color;
-  color: @accent_color;
-}
-
-/* ============== TASKS ============== */
+/* ============== TAREAS ============== */
 .task-card {
-  background-color: alpha(@card_bg_color, 0.5);
+  background-color: alpha(@card_bg_color, 0.55);
   border-radius: 10px;
   padding: 10px 14px;
   margin: 4px 0;
-  border-left: 3px solid @accent_color;
-}
-
-.task-card.priority-high {
-  border-left-color: @danger_color;
-}
-
-.task-card.priority-medium {
-  border-left-color: @warning_color;
-}
-
-.task-card.priority-low {
-  border-left-color: @success_color;
+  border-left: 3px solid @accent_bg_color;
 }
 
 .task-card:hover {
-  background-color: alpha(@card_bg_color, 0.65);
+  background-color: alpha(@card_bg_color, 0.7);
 }
 
-/* ============== CALENDAR ============== */
+/* Las prioridades pintan el borde izquierdo de una tarjeta y, a la vez, sirven
+   como franja de color suelta (el indicador de 4px del dashboard), que no tiene
+   borde donde apoyarse. */
+.priority-alta  { border-left-color: @danger_color;  background-color: @danger_color; }
+.priority-media { border-left-color: @warning_color; background-color: @warning_color; }
+.priority-baja  { border-left-color: @success_color; background-color: @success_color; }
+
+.task-card.priority-alta,
+.task-card.priority-media,
+.task-card.priority-baja {
+  background-color: alpha(@card_bg_color, 0.55);
+}
+
+.task-card.priority-alta:hover,
+.task-card.priority-media:hover,
+.task-card.priority-baja:hover {
+  background-color: alpha(@card_bg_color, 0.7);
+}
+
+/* Puntos e indicadores de color: los tres estados / prioridades del sistema.
+   Antes cada uno se pintaba con un Gtk.CssProvider por widget, con la API
+   deprecada get_style_context().add_provider(). */
+.color-dot {
+  border-radius: 50%;
+  background-color: alpha(currentColor, 0.4);
+}
+
+.color-bar {
+  border-radius: 2px;
+  background-color: alpha(currentColor, 0.4);
+}
+
+.color-dot.accent, .color-bar.accent   { background-color: @accent_bg_color; }
+.color-dot.warning, .color-bar.warning { background-color: @warning_color; }
+.color-dot.error, .color-bar.error     { background-color: @danger_color; }
+.color-dot.success, .color-bar.success { background-color: @success_color; }
+
+/* Una lista vacia no debe dibujar el recuadro de una lista con contenido:
+   el nodo "list" de GTK pinta fondo aunque se le quite .boxed-list. */
+.empty-list,
+.empty-list > row {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* ============== CALENDARIO ============== */
 .calendar-day {
   min-width: 36px;
   min-height: 36px;
   border-radius: 50%;
 }
 
-.calendar-day.today {
+.calendar-today {
+  padding: 6px;
+}
+
+.calendar-day.today,
+.calendar-today,
+.today-highlight {
   background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  border-radius: 50%;
   font-weight: bold;
+  min-width: 22px;
+  min-height: 22px;
 }
 
-/* Note: has-deadline red dot is created programmatically, not via CSS */
-.calendar-day.has-deadline {
-  font-weight: bold;
+.deadline-dot {
+  color: @danger_color;
+  font-size: 6px;
 }
 
-/* ============== SCHEDULE ============== */
+/* ============== HORARIO ============== */
 .schedule-event {
   border-radius: 6px;
   padding: 6px 10px;
@@ -113,15 +150,36 @@ button.suggested-action:hover {
 .schedule-header {
   font-weight: bold;
   padding: 8px;
-  border-bottom: 1px solid alpha(white, 0.1);
+  border-bottom: 1px solid alpha(currentColor, 0.1);
+}
+
+/* Celdas de la rejilla: una clase, no un CssProvider por celda */
+.schedule-cell {
+  border-radius: 0;
+  border-bottom: 1px solid alpha(currentColor, 0.09);
+}
+
+.schedule-day-header {
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.schedule-day-header.schedule-today {
+  background-color: alpha(@accent_bg_color, 0.25);
+}
+
+.next-class-card {
+  background-color: alpha(@accent_bg_color, 0.15);
+  border-radius: 8px;
+  padding: 8px;
 }
 
 /* ============== KANBAN ============== */
 .kanban-column {
-  background-color: alpha(@card_bg_color, 0.4);
+  background-color: alpha(@card_bg_color, 0.45);
   border-radius: 12px;
   padding: 12px;
-  min-width: 280px;
+  min-width: 240px;
 }
 
 .kanban-column-header {
@@ -130,26 +188,39 @@ button.suggested-action:hover {
   margin-bottom: 8px;
 }
 
+.kanban-column.drag-hover {
+  background-color: alpha(@accent_bg_color, 0.15);
+  border: 2px dashed @accent_bg_color;
+}
+
 /* ============== POMODORO ============== */
 .pomodoro-timer {
   font-size: 48px;
   font-weight: bold;
-  font-family: "Source Code Pro", monospace;
+  font-feature-settings: "tnum";
+  font-family: monospace;
 }
 
-.pomodoro-active {
-  color: @danger_color;
+.pomodoro-time {
+  font-size: 28px;
+  font-weight: bold;
+  font-feature-settings: "tnum";
+  font-family: monospace;
 }
 
-.pomodoro-break {
-  color: @success_color;
-}
+.pomodoro-active { color: @danger_color; }
+.pomodoro-break  { color: @success_color; }
 
-/* ============== STATS ============== */
+/* ============== ESTADISTICAS ============== */
 .stat-value {
   font-size: 32px;
   font-weight: bold;
   color: @accent_color;
+}
+
+.stat-mini {
+  font-size: 18px;
+  font-weight: bold;
 }
 
 .stat-label {
@@ -157,17 +228,51 @@ button.suggested-action:hover {
   opacity: 0.7;
 }
 
-/* ============== BUTTONS ============== */
-.accent-button {
-  background-color: @accent_color;
-  color: white;
+/* Barra del grafico semanal: una caja de color, no un boton reciclado */
+.chart-bar {
+  background-color: @accent_bg_color;
+  border-radius: 4px 4px 0 0;
+  min-width: 18px;
 }
 
-.accent-button:hover {
-  background-color: shade(@accent_color, 1.1);
+/* ============== NOTAS ============== */
+.note-card {
+  background-color: alpha(@warning_color, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  border-left: 3px solid @warning_color;
 }
 
-/* ============== NAVIGATION ============== */
+/* ============== WIDGET ============== */
+.urgent-card {
+  background-color: alpha(@danger_color, 0.15);
+  border-radius: 8px;
+  padding: 8px;
+  border-left: 3px solid @danger_color;
+}
+
+.progress-bar { min-height: 6px; }
+.progress-bar > trough {
+  background-color: alpha(currentColor, 0.12);
+  border-radius: 3px;
+}
+.progress-bar > trough > progress {
+  background-color: @accent_bg_color;
+  border-radius: 3px;
+}
+
+.translucent-btn {
+  background-color: alpha(@accent_bg_color, 0.6);
+  color: @accent_fg_color;
+  border: none;
+  box-shadow: none;
+}
+
+.translucent-btn:hover {
+  background-color: @accent_bg_color;
+}
+
+/* ============== NAVEGACION ============== */
 .nav-button {
   min-width: 32px;
   min-height: 32px;
@@ -175,63 +280,22 @@ button.suggested-action:hover {
   padding: 0;
 }
 
-/* ============== QUICK NOTES ============== */
-.note-card {
-  background-color: alpha(#fff3cd, 0.15);
-  border-radius: 8px;
-  padding: 12px;
-  border-left: 3px solid @warning_color;
-}
-
 /* ============== SCROLLBARS ============== */
-scrollbar {
-  background-color: transparent;
-}
+scrollbar { background-color: transparent; }
 
 scrollbar slider {
-  background-color: alpha(white, 0.15);
+  background-color: alpha(currentColor, 0.2);
   border-radius: 10px;
   min-width: 8px;
   min-height: 8px;
 }
 
 scrollbar slider:hover {
-  background-color: alpha(white, 0.25);
+  background-color: alpha(currentColor, 0.35);
 }
 
-/* ============== SIDEBAR FIXED ============== */
-.sidebar-button:active,
-.sidebar-button:checked,
-.sidebar-button.active {
-  background-color: @accent_bg_color;
-  color: @accent_color;
-}
-
-.sidebar togglebutton:checked {
-  background-color: @accent_bg_color;
-}
-
-/* ============== KANBAN DRAG ============== */
-.kanban-column.drag-hover {
-  background-color: alpha(@accent_color, 0.15);
-  border: 2px dashed @accent_color;
-}
-
-.task-card.priority-alta {
-  border-left-color: @danger_color;
-}
-
-.task-card.priority-media {
-  border-left-color: @warning_color;
-}
-
-.task-card.priority-baja {
-  border-left-color: @success_color;
-}
-
-/* Smooth transitions */
+/* Solo lo que cambia de verdad: animar "all" repinta de mas en cada hover */
 .task-card,
-.kanban-column,
-.sidebar-button {
-  transition: all 200ms ease;
+.kanban-column {
+  transition: background-color 150ms ease;
 }

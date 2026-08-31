@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from ..utils.system import data_dir
+
 
 class Database:
     """SQLite database manager for UniDex"""
@@ -22,10 +24,10 @@ class Database:
             cls._instance = cls()
         return cls._instance
     
-    def __init__(self):
-        self.db_dir = Path.home() / ".local" / "share" / "UniDex"
-        self.db_dir.mkdir(parents=True, exist_ok=True)
-        self.db_path = self.db_dir / "data.db"
+    def __init__(self, db_path=None):
+        """db_path solo se usa en tests (":memory:"); en la app va la de siempre."""
+        self.db_dir = data_dir("UniDex")
+        self.db_path = db_path or self.db_dir / "data.db"
         self.backup_dir = self.db_dir / "backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
@@ -352,8 +354,12 @@ class Database:
     def get_today_pomodoros(self) -> List[Dict]:
         today = datetime.now().strftime("%Y-%m-%d")
         cursor = self.conn.cursor()
+        # started_at lo pone CURRENT_TIMESTAMP, que SQLite guarda en UTC, y today
+        # es local: sin 'localtime' los pomodoros de la tarde/noche (UTC-5 en
+        # adelante) contaban como del dia siguiente y desaparecian de "hoy".
         cursor.execute(
-            "SELECT * FROM pomodoro_sessions WHERE date(started_at) = ? AND completed = 1",
+            "SELECT * FROM pomodoro_sessions "
+            "WHERE date(started_at, 'localtime') = ? AND completed = 1",
             (today,)
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -386,40 +392,33 @@ class Database:
             return dict(row)
         return {'tasks_completed': 0, 'pomodoros_completed': 0, 'total_focus_minutes': 0}
     
+    def _stats_since(self, since: str) -> Dict:
+        """Suma de la tabla statistics desde una fecha (inclusive)"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(SUM(tasks_completed), 0) as tasks,
+                   COALESCE(SUM(pomodoros_completed), 0) as pomodoros,
+                   COALESCE(SUM(total_focus_minutes), 0) as focus_minutes
+            FROM statistics WHERE date >= ?
+        """, (since,))
+        row = cursor.fetchone()
+        return {
+            'tasks_completed': row['tasks'],
+            'pomodoros_completed': row['pomodoros'],
+            'total_focus_minutes': row['focus_minutes']
+        }
+
     def get_weekly_stats(self) -> Dict:
         today = datetime.now()
         week_start = today - timedelta(days=today.weekday())
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT COALESCE(SUM(tasks_completed), 0) as tasks,
-                   COALESCE(SUM(pomodoros_completed), 0) as pomodoros,
-                   COALESCE(SUM(total_focus_minutes), 0) as focus_minutes
-            FROM statistics WHERE date >= ?
-        """, (week_start.strftime("%Y-%m-%d"),))
-        row = cursor.fetchone()
-        return {
-            'tasks_completed': row['tasks'],
-            'pomodoros_completed': row['pomodoros'],
-            'total_focus_minutes': row['focus_minutes']
-        }
-    
+        return self._stats_since(week_start.strftime("%Y-%m-%d"))
+
     def get_monthly_stats(self) -> Dict:
-        today = datetime.now()
-        month_start = today.replace(day=1)
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT COALESCE(SUM(tasks_completed), 0) as tasks,
-                   COALESCE(SUM(pomodoros_completed), 0) as pomodoros,
-                   COALESCE(SUM(total_focus_minutes), 0) as focus_minutes
-            FROM statistics WHERE date >= ?
-        """, (month_start.strftime("%Y-%m-%d"),))
-        row = cursor.fetchone()
-        return {
-            'tasks_completed': row['tasks'],
-            'pomodoros_completed': row['pomodoros'],
-            'total_focus_minutes': row['focus_minutes']
-        }
-    
+        return self._stats_since(datetime.now().replace(day=1).strftime("%Y-%m-%d"))
+
+    def get_alltime_stats(self) -> Dict:
+        return self._stats_since("0001-01-01")
+
     def get_stats_range(self, start_date: str, end_date: str) -> List[Dict]:
         cursor = self.conn.cursor()
         cursor.execute("""

@@ -1,0 +1,93 @@
+/* =============================================================================
+   UniDex - Ajustes para macOS (se carga encima de style.css)
+   macOS no expone vibrancy a GTK: una ventana semi-transparente deja ver el
+   escritorio y se ve sucia. Aqui todo es opaco, como cualquier app nativa.
+   ============================================================================= */
+
+window.main-window {
+  background-color: @window_bg_color;
+}
+
+window.widget-window {
+  background-color: alpha(@window_bg_color, 0.97);
+}
+
+/* ============== HEADERBARS ==============
+   Barras planas y bajas, del mismo tono que su panel: es el aspecto de Finder,
+   Mail o Notas, donde la barra de titulo no se distingue del contenido. */
+headerbar {
+  min-height: 34px;
+  background-color: transparent;
+  box-shadow: none;
+  border-bottom: none;
+}
+
+headerbar windowtitle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ============== SIDEBAR ==============
+   Tono ligeramente distinto al contenido y separador de 1px muy tenue. */
+.navigation-sidebar,
+.sidebar {
+  background-color: shade(@window_bg_color, 0.94);
+}
+
+.navigation-sidebar > row {
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 1px 4px;
+}
+
+/* Seleccion del sidebar: relleno solido con el acento y texto blanco, que es
+   como se marca la fila activa en Finder, Mail o Notas. */
+.navigation-sidebar > row:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+.navigation-sidebar > row:selected:hover {
+  background-color: shade(@accent_bg_color, 1.08);
+}
+
+/* ============== TARJETAS ==============
+   Opacas y con sombra corta, en lugar del cristal translucido de Linux. */
+.glass-card,
+.task-card,
+.kanban-column,
+.note-card {
+  background-color: shade(@window_bg_color, 1.14);
+  border: 1px solid alpha(currentColor, 0.07);
+  box-shadow: 0 1px 2px alpha(black, 0.12);
+}
+
+.glass-card:hover,
+.task-card:hover {
+  background-color: shade(@window_bg_color, 1.22);
+}
+
+.task-card,
+.note-card {
+  border-left-width: 3px;
+}
+
+/* ============== SCROLLBARS ==============
+   Finas y sin fondo, como las overlay del sistema. */
+scrollbar slider {
+  min-width: 7px;
+  min-height: 7px;
+  background-color: alpha(currentColor, 0.28);
+}
+
+scrollbar slider:hover {
+  background-color: alpha(currentColor, 0.45);
+}
+
+/* ============== TIPOGRAFIA ==============
+   El sistema ya entrega .AppleSystemUIFont; solo se ajusta el monoespaciado. */
+.pomodoro-timer,
+.pomodoro-time {
+  font-family: "SF Mono", "Menlo", monospace;
+  font-weight: 500;
+}

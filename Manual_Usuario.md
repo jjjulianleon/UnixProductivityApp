@@ -48,12 +48,12 @@ Este manual esta dirigido a usuarios finales y tiene como objetivo proporcionar 
 
 | Componente | Requisito |
 |------------|-----------|
-| Sistema operativo | Fedora Linux 41+ (recomendado), Ubuntu 22.04+, o cualquier distribucion con GTK4 |
+| Sistema operativo | Fedora Linux 41+ (recomendado), Ubuntu 22.04+, cualquier distribucion con GTK4, o macOS 12+ |
 | Entorno de escritorio | KDE Plasma 6.x o GNOME 45+ |
 | Display server | Wayland (recomendado) o X11 |
 | Python | 3.10 o superior (desarrollado con 3.13) |
 | GTK4 | 4.0+ con Libadwaita 1.x |
-| Fuente tipografica | Source Code Pro (recomendada) |
+| Fuente tipografica | La del sistema; se puede cambiar en Configuracion |
 
 ### 3.3. Dependencias del Sistema
 
@@ -89,6 +89,21 @@ sudo apt install libgtk-4-dev libadwaita-1-dev python3-gi python3-pip
 
 4. Una vez completada la instalacion, la aplicacion aparecera en el menu de aplicaciones bajo el nombre **UniDex**.
 
+### 4.1.1. Instalacion en macOS
+
+Requisitos: macOS 12 o superior y [Homebrew](https://brew.sh).
+
+```bash
+chmod +x install_macos.sh
+./install_macos.sh
+```
+
+El instalador descarga el stack GTK4 con Homebrew (`gtk4`, `libadwaita`, `pygobject3`, `adwaita-icon-theme`, `librsvg`), construye **UniDex.app** y **UniDex Widget.app** en `/Applications`, y crea un entorno virtual dentro de cada bundle. El widget no arranca automaticamente: se abre desde `UniDex Widget.app` cuando se necesita. Para activar el inicio automatico, ejecutar `./install_macos.sh --autostart`.
+
+La aplicacion queda disponible en Spotlight (⌘ + Espacio) y en Launchpad. Para desinstalar: `./uninstall_macos.sh`.
+
+> **Nota:** en macOS el widget es una ventana flotante (`UniDex Widget.app`); el plasmoide es exclusivo de KDE Plasma. La primera vez, el sistema puede pedir permiso para acceder a iCloud Drive si el vault de Obsidian esta ahi: aceptar para habilitar la sincronizacion.
+
 ### 4.2. Inicio de la Aplicacion
 
 **Desde el menu de aplicaciones:**
@@ -117,30 +132,42 @@ El widget se configura automaticamente para iniciar con la sesion del escritorio
 
 ### 5.1. Estructura de la Interfaz
 
-La aplicacion principal se compone de una **barra lateral de navegacion** a la izquierda y un **area de contenido** a la derecha que cambia segun la seccion seleccionada.
+La aplicacion principal se compone de una **barra lateral de navegacion** a la izquierda y un **area de contenido** a la derecha que cambia segun la seccion seleccionada. Cada panel tiene su propia barra de titulo, como en Archivos, Correo o Finder.
 
-| Seccion | Descripcion | Icono/Etiqueta |
-|---------|-------------|----------------|
-| Dashboard | Vista general del dia actual con resumen de tareas pendientes y accesos rapidos | Dashboard |
-| Kanban | Tablero de gestion de tareas con tres columnas: Pendiente, En Progreso, Completado | Kanban |
-| Calendario | Vista mensual con indicadores de fechas limite y detalle por dia | Calendario |
-| Pomodoro | Temporizador de trabajo con intervalos configurables y seguimiento de sesiones | Pomodoro |
-| Notas Rapidas | Editor de notas sincronizado con Obsidian Rough Notes | Notas |
-| Horario | Vista semanal tipo calendario de clases y eventos recurrentes | Horario |
-| Estadisticas | Graficos de productividad: tareas completadas, sesiones Pomodoro y tiempo de enfoque | Estadisticas |
+Las ocho secciones, en el orden en que aparecen en la barra lateral:
+
+| # | Seccion | Descripcion |
+|---|---------|-------------|
+| 1 | Dashboard | Resumen del dia: contadores, tareas urgentes y horario de hoy |
+| 2 | Tareas | Lista completa de tareas con filtros por categoria |
+| 3 | Kanban | Tablero con tres columnas: Pendiente, En Progreso, Completado |
+| 4 | Calendario | Vista mensual con indicadores de fechas limite y detalle por dia |
+| 5 | Horario | Vista semanal de clases y eventos recurrentes |
+| 6 | Pomodoro | Temporizador con intervalos configurables y seguimiento de sesiones |
+| 7 | Rough Notes | Editor de notas sincronizado con la carpeta Rough Notes de Obsidian |
+| 8 | Estadisticas | Productividad: tareas completadas, sesiones Pomodoro y actividad semanal |
+
+El numero de cada fila es su atajo: `⌘1`…`⌘8` en macOS, `Ctrl+1`…`Ctrl+8` en Linux.
+Debajo de la lista, **Configuracion** abre los ajustes (`⌘,` / `Ctrl+,`).
 
 ### 5.2. Atajos de Teclado
 
-| Atajo | Accion |
-|-------|--------|
-| `Ctrl+1` | Ir a Dashboard |
-| `Ctrl+2` | Ir a Tareas/Kanban |
-| `Ctrl+3` | Ir a Calendario |
-| `Ctrl+4` | Ir a Notas |
-| `Ctrl+5` | Ir a Estadisticas |
-| `Ctrl+N` | Crear nueva tarea |
-| `Ctrl+F` | Enfocar campo de busqueda |
-| `F5` | Refrescar datos |
+En macOS el modificador es `⌘` (Command); en Linux, `Ctrl`.
+
+| macOS | Linux | Accion |
+|-------|-------|--------|
+| `⌘1` | `Ctrl+1` | Ir a Dashboard |
+| `⌘2` | `Ctrl+2` | Ir a Tareas |
+| `⌘3` | `Ctrl+3` | Ir a Kanban |
+| `⌘4` | `Ctrl+4` | Ir a Calendario |
+| `⌘5` | `Ctrl+5` | Ir a Horario |
+| `⌘6` | `Ctrl+6` | Ir a Pomodoro |
+| `⌘7` | `Ctrl+7` | Ir a Rough Notes |
+| `⌘8` | `Ctrl+8` | Ir a Estadisticas |
+| `⌘N` | `Ctrl+N` | Crear nueva tarea |
+| `⌘,` | `Ctrl+,` | Abrir Configuracion |
+| `⌘W` | `Ctrl+W` | Cerrar la ventana |
+| `⌘Q` | `Ctrl+Q` | Salir de la aplicacion |
 
 ---
 
@@ -277,17 +304,34 @@ UniDex sincroniza bidireccionalmente las tareas con archivos Markdown de Obsidia
 | Fedora | `~/Documents/Obsidian/Pendientes Fedora.md` |
 | Notas Rapidas | `~/Documents/Obsidian/Rough Notes/` |
 
+En macOS la raiz por defecto es la de iCloud Drive
+(`~/Library/Mobile Documents/iCloud~md~obsidian/Documents`). Para usar otra ruta
+en cualquiera de los dos sistemas:
+
+```bash
+export UNIDEX_OBSIDIAN_VAULT="/ruta/a/tu/vault"
+```
+
 **Formato de tareas en Obsidian:**
 ```markdown
-- [ ] Titulo de la tarea | Descripcion opcional [deadline: 2026-01-31] [priority: alta] (en progreso)
-- [x] Tarea completada
+- [ ] Titulo de la tarea [deadline: 2026-01-31] [priority: alta] (en progreso)
+  Descripcion opcional, en una o varias lineas
+  indentadas justo debajo de la tarea.
+- [x] Tarea completada (completado: 2026-01-15)
 ```
 
 **Metadatos soportados:**
 - Estado: `- [ ]` (pendiente), `- [x]` (completado), `(en progreso)` al final
 - Fecha limite: `[deadline: YYYY-MM-DD]` o `📅 YYYY-MM-DD`
 - Prioridad: `[priority: alta|media|baja]`
-- Descripcion: despues del separador `|`
+- Descripcion: lineas indentadas debajo de la tarea
+
+La descripcion que escribas en la aplicacion se guarda tambien en el archivo, y
+al reves: si la editas en Obsidian, aparece en la aplicacion. Las lineas
+indentadas que empiecen por `- [ ]` se leen como subtareas, no como descripcion.
+
+> Tambien se sigue leyendo el formato antiguo de una sola linea
+> (`- [ ] Titulo | Descripcion`), por si tienes tareas escritas asi a mano.
 
 ### 8.2. Brightspace D2L
 
@@ -387,7 +431,7 @@ UniDex fue desarrollado como respuesta a la fragmentacion de herramientas de pro
 1. **Falta de integracion nativa:** Las herramientas web (Brightspace, Teams) no ofrecen widgets nativos de escritorio en Linux, obligando a abrir el navegador constantemente.
 2. **Obsidian como hub central:** Muchos estudiantes ya usan Obsidian para notas; la sincronizacion bidireccional permite gestionar tareas sin abandonar su flujo de trabajo.
 3. **Widget siempre visible:** Inspirado en los widgets de Windows y macOS, se identifico la necesidad de un panel compacto y permanente que muestre la informacion del dia.
-4. **Diseno glassmorphism:** Se opto por un estilo visual moderno con fondos semi-transparentes, coherente con las tendencias de escritorios Linux modernos.
+4. **Aspecto nativo en cada sistema:** En vez de una interfaz propia se usan los patrones de Libadwaita, de modo que la aplicacion se comporte como el resto del escritorio. En Linux la ventana es translucida; en macOS es opaca y los botones semaforo del sistema quedan integrados en la barra del panel lateral.
 
 ---
 
@@ -427,9 +471,17 @@ El sistema es completamente funcional sobre Python 3.13 con GTK4/Libadwaita para
 
 ### Donde se almacenan mis datos?
 
+**Linux:**
+
 - **Base de datos:** `~/.local/share/UniDex/data.db`
 - **Backups:** `~/.local/share/UniDex/backups/`
 - **Configuracion:** `~/.config/calendar_widget/`
+
+**macOS:**
+
+- **Base de datos:** `~/Library/Application Support/UniDex/data.db`
+- **Backups:** `~/Library/Application Support/UniDex/backups/`
+- **Configuracion:** `~/Library/Application Support/calendar_widget/`
 
 ### Como exporto mis datos?
 
@@ -437,7 +489,9 @@ Desde la aplicacion principal, acceder a Configuracion > Backup/Export. Se sopor
 
 ### El widget no aparece al iniciar sesion?
 
-Verificar que el archivo `~/.config/autostart/unidex-widget.desktop` exista. Si fue eliminado, ejecutar nuevamente `install.sh` o crear manualmente la entrada de autostart.
+En Linux, verificar que el archivo `~/.config/autostart/unidex-widget.desktop` exista. Si fue eliminado, ejecutar nuevamente `install.sh` o crear manualmente la entrada de autostart.
+
+En macOS el widget no inicia solo por diseno; para habilitarlo, ejecutar `./install_macos.sh --autostart` y verificar con `launchctl list | grep unidex`.
 
 ### Las tareas de Obsidian no se sincronizan?
 
@@ -447,7 +501,7 @@ Verificar que el archivo `~/.config/autostart/unidex-widget.desktop` exista. Si 
 
 ### Como cambio las duraciones del Pomodoro?
 
-Abrir Configuracion (icono de engranaje) > pestana Pomodoro > ajustar los valores de duracion de trabajo, descanso corto y descanso largo.
+Abrir **Configuracion** (al pie de la barra lateral, o `⌘,` / `Ctrl+,`) > pestana Pomodoro > ajustar los valores de duracion de trabajo, descanso corto y descanso largo.
 
 ---
 

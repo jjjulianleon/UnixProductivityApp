@@ -24,29 +24,35 @@ Este documento contiene la documentacion tecnica completa de UniDex, incluyendo 
 
 ### Objetivo
 
-Crear una aplicacion de productividad nativa para Fedora Linux con KDE Plasma que integre:
+Aplicacion de productividad multiplataforma (Linux y macOS) que integra:
 
-1. Gestion de tareas con sincronizacion a Obsidian
-2. Calendario con conexion a Microsoft Teams
-3. Importacion de fechas limite desde Brightspace D2L (plataforma universitaria)
-4. Widget de escritorio siempre visible
+1. Gestion de tareas con sincronizacion bidireccional a Obsidian
+2. Calendario y horario semanal
+3. Importacion de fechas limite desde Brightspace D2L e iCloud (CalDAV)
+4. Widget de escritorio compacto
 5. Temporizador Pomodoro con estadisticas
 
 ### Publico Objetivo
 
 Estudiantes universitarios que usan:
-- Fedora Linux con KDE Plasma (Wayland)
+- Linux (GNOME o KDE Plasma) o macOS 12+
 - Obsidian para notas
-- Microsoft Teams para clases y reuniones
 - Brightspace D2L como plataforma academica
+- Microsoft Teams / iCloud para su calendario
 
 ### Filosofia de Diseno
 
-- Glassmorphism: Fondos semi-transparentes con blur
-- Fuente monoespaciada: Source Code Pro
-- Colores oscuros con acentos en azul
-- UI en espanol
-- Interfaz limpia sin distracciones
+- **Aspecto nativo en cada plataforma.** Se usan los patrones de Libadwaita
+  (NavigationSplitView, ToolbarView, HeaderBar) en vez de una UI propia. En
+  macOS una segunda hoja de estilos la vuelve opaca y ajusta barras y sidebar,
+  porque el sistema no da vibrancy a GTK y la translucidez de Linux se ve sucia.
+- **Sin colores fijos.** Todo sale de los colores nombrados de Adwaita
+  (`@window_bg_color`, `@card_bg_color`) o de `alpha(currentColor, x)`, para que
+  el tema claro y el oscuro funcionen sin dos hojas separadas.
+- **Fuente del sistema** por defecto, configurable desde Ajustes.
+- UI en espanol, sin distracciones.
+
+---
 
 ---
 
@@ -57,34 +63,46 @@ Estudiantes universitarios que usan:
 | Componente | Tecnologia | Version |
 |------------|------------|---------|
 | Lenguaje | Python | 3.13 |
-| Framework GUI | PyQt6 | 6.x |
+| Framework GUI | GTK4 + Libadwaita | 4.22 / 1.9 |
+| Binding | PyGObject | 3.42+ |
 | Base de datos | SQLite | 3.x |
-| Sistema operativo | Fedora Linux | 41 |
-| Entorno de escritorio | KDE Plasma | 6.x |
-| Display server | Wayland | - |
+| Sistemas operativos | Linux (GNOME/KDE), macOS | 12+ |
 
 ### Dependencias Python
 
-**Archivo:** requirements.txt
+**Archivos:** `requirements_gtk.txt` (Linux), `requirements_macos.txt` (macOS)
 
 ```
-PyQt6>=6.4.0        # Framework GUI principal
+PyGObject>=3.42.0   # Binding de GTK4 (solo Linux; en macOS viene de Homebrew)
+pycairo>=1.20.0     # Requerido por PyGObject
 caldav>=1.2.0       # Sincronizacion iCloud Calendar (CalDAV)
 icalendar>=5.0.0    # Parseo de calendarios ICS
 requests>=2.28.0    # Obtener feeds ICS remotos
 ```
 
+En macOS, GTK4 y Libadwaita se instalan con Homebrew y el entorno virtual se
+crea con `--system-site-packages` para verlos:
+
+```bash
+brew install gtk4 libadwaita pygobject3 adwaita-icon-theme librsvg
+```
+
+`caldav` e `icalendar` son opcionales: si faltan, la app arranca igual y solo
+se desactiva la sincronizacion de calendarios.
+
 ### Rutas del Sistema
 
-| Recurso | Ruta |
-|---------|------|
-| Base de datos | ~/.local/share/UniDex/data.db |
-| Backups | ~/.local/share/UniDex/backups/ |
-| Configuracion | ~/.config/UniDex/ |
-| Config ICS | ~/.config/calendar_widget/ics_config.json |
-| Config iCloud | ~/.config/calendar_widget/icloud_config.json |
-| Cache ICS | ~/.config/calendar_widget/cache/ |
-| Token MS Teams | ~/.config/calendar_widget/ms_token.json |
+| Recurso | Linux | macOS |
+|---------|-------|-------|
+| Base de datos | `~/.local/share/UniDex/data.db` | `~/Library/Application Support/UniDex/data.db` |
+| Backups | `~/.local/share/UniDex/backups/` | `~/Library/Application Support/UniDex/backups/` |
+| Configuracion | `~/.config/UniDex/` | `~/Library/Application Support/UniDex/` |
+| Vault de Obsidian | `~/Documents/Obsidian` | `~/Library/Mobile Documents/iCloud~md~obsidian/Documents` |
+
+Las rutas las resuelve `src/utils/system.py`, el unico modulo que sabe en que
+sistema se esta ejecutando. `$UNIDEX_OBSIDIAN_VAULT` sobreescribe la del vault.
+
+---
 
 ---
 
@@ -109,34 +127,28 @@ La aplicacion sigue un patron MVC modificado con un sistema de senales centraliz
 
 ### Modulos Principales
 
-**src/core/** - Logica de negocio
-- database.py: Singleton que maneja todas las operaciones SQLite
-- task_manager.py: CRUD de tareas con validacion
-- obsidian_sync.py: Sincronizacion bidireccional con archivos markdown
-- notifications.py: Integracion con sistema de notificaciones Linux
-- signals.py: Hub central de senales PyQt para comunicacion reactiva
+**src/core/** - Logica de negocio (sin nada de UI)
+- `database.py`: Singleton SQLite. Acepta una ruta opcional (`Database(":memory:")`) para los tests.
+- `task_manager.py`: CRUD de tareas y fachada sobre Obsidian, ICS e iCloud.
+- `obsidian_sync.py`: Lectura y escritura de los .md del vault. Las rutas son inyectables.
+- `auto_sync.py`: Sincronizacion periodica en segundo plano.
+- `notifications.py`: Recordatorios de fechas limite (3 dias, 1 dia, mismo dia).
+- `signals.py`: Hub de senales propio (`connect` / `emit`), sin dependencias de GUI.
 
-**src/ui/widgets/** - Componentes visuales reutilizables
-- calendar.py: Widget de calendario mensual con grid
-- schedule.py: Vista semanal con canvas personalizado (QPainter)
-- kanban.py: Tablero con columnas y drag-and-drop
-- pomodoro.py: Temporizador con barra de progreso
-- quick_notes.py: Editor de notas con sincronizacion
-- common.py: Componentes compartidos (DraggableTaskCard, etc)
-
-**src/ui/views/** - Vistas principales de la aplicacion
-- dashboard.py: Pagina de inicio con resumen
-- tasks_view.py: Vista completa del Kanban con filtros
-- calendar_view.py: Calendario mensual + horario semanal
-- statistics_view.py: Graficos de productividad
-
-**src/ui/dialogs/** - Ventanas modales
-- task_dialogs.py: Crear/editar tareas, crear/editar eventos
-- settings_dialog.py: Configuracion de la aplicacion
+**src/gtk/** - Interfaz GTK4
+- `__init__.py`: `init_theme()`, que carga CSS, iconos propios y la fuente elegida.
+- `window.py`: Ventana principal. `NAV_ITEMS` define las 8 vistas, su titulo y su icono.
+- `styles/style.css`: Hoja unica, compartida con el widget.
+- `styles/macos.css`: Se carga encima en macOS para el aspecto nativo del sistema.
+- `views/`: `dashboard.py`, `tasks.py`, `calendar.py`, `stats.py`
+- `widgets/`: `kanban.py`, `pomodoro.py`, `notes.py`, `schedule.py`, `task_detail.py`, `common.py`
+- `dialogs/`: `add_task.py`, `settings.py`
 
 **src/utils/** - Utilidades
-- styles.py: Tema glassmorphism, funciones de estilo CSS
-- constants.py: Configuracion global, rutas, valores por defecto
+- `system.py`: Capa de plataforma. Rutas, notificaciones, abrir archivos, `IS_MAC`.
+- `constants.py`: Constantes, categorias, prioridades y la lista de fuentes por plataforma.
+
+**assets/icons/** - Iconos simbolicos propios, para lo que el tema Adwaita no trae.
 
 ### Flujo de Datos
 
@@ -200,11 +212,12 @@ Todas las Views se actualizan
 - [x] Siempre en escritorio
 
 **Diseno:**
-- [x] Tema glassmorphism
-- [x] Fuente Source Code Pro
-- [x] Colores consistentes
-- [x] Tarjetas con bordes de categoria
-- [x] Iconos y badges
+- [x] Layout nativo de Libadwaita (NavigationSplitView + ToolbarView)
+- [x] Hoja de estilos unica para la app y el widget
+- [x] Compatible con tema claro y oscuro
+- [x] Hoja de ajustes especifica para macOS
+- [x] Iconos simbolicos propios donde Adwaita no llega
+- [x] Estados vacios compactos dentro de tarjetas
 
 ### Funcionalidades Parciales
 
@@ -216,9 +229,9 @@ Todas las Views se actualizan
 
 **UI:**
 - [x] Temporizador Pomodoro con duraciones configurables
-- [x] Dialogo de configuracion con tabs (General, Pomodoro, Integraciones)
-- [ ] Animaciones de transicion (basicas)
-- [ ] Combobox dropdowns con fondo oscuro (problema de Qt en Wayland)
+- [x] Dialogo de configuracion (General, Pomodoro, Integraciones)
+- [x] Selector de fuente por plataforma
+- [ ] Punto de corte responsive para colapsar el sidebar en ventanas estrechas
 
 ### Funcionalidades Pendientes
 
@@ -484,172 +497,176 @@ CREATE TABLE backup_history (
 
 ## Sistema de Senales
 
-### SignalHub (src/core/signals.py)
+### SignalHub (`src/core/signals.py`)
 
-Patron Singleton que centraliza todas las senales de la aplicacion para comunicacion reactiva entre componentes.
+Singleton que centraliza la comunicacion entre componentes. La implementacion es
+propia (`connect` / `disconnect` / `emit`), sin depender de ningun toolkit, para
+que el nucleo pueda usarse desde la app, desde el widget o desde un test.
 
 ```python
-class SignalHub(QObject):
+class GenericSignal:
+    def connect(self, slot): ...
+    def disconnect(self, slot): ...
+    def emit(self, *args, **kwargs): ...   # los errores de un slot no cortan el resto
+
+
+class SignalHub:
     # Tareas
-    task_added = pyqtSignal(dict)
-    task_updated = pyqtSignal(int, dict)
-    task_deleted = pyqtSignal(int)
-    tasks_reloaded = pyqtSignal()
-    
+    task_added / task_updated / task_deleted / tasks_reloaded
     # Notas
-    note_added = pyqtSignal(dict)
-    note_updated = pyqtSignal(int)
-    note_deleted = pyqtSignal(int)
-    notes_reloaded = pyqtSignal()
-    
+    note_added / note_updated / note_deleted / notes_reloaded
     # Pomodoro
-    pomodoro_started = pyqtSignal(int)
-    pomodoro_completed = pyqtSignal(int)
-    pomodoro_tick = pyqtSignal(int)
-    
-    # Horario
-    schedule_updated = pyqtSignal()
-    
-    # Estadisticas
-    stats_updated = pyqtSignal()
-    
-    # Notificaciones
-    notification_triggered = pyqtSignal(str, str, str)
-    reminder_due = pyqtSignal(dict)
-    
-    # Configuracion
-    settings_changed = pyqtSignal(str, object)
-    theme_changed = pyqtSignal(str)
-    
-    # Sincronizacion
-    obsidian_sync_started = pyqtSignal()
-    obsidian_sync_completed = pyqtSignal()
-    backup_completed = pyqtSignal(str)
+    pomodoro_started / pomodoro_completed / pomodoro_tick
+    # Horario, estadisticas, notificaciones, configuracion, sincronizacion
+    schedule_updated, stats_updated, notification_triggered, reminder_due,
+    settings_changed, theme_changed,
+    obsidian_sync_started, obsidian_sync_completed, backup_completed,
+    ics_sync_completed, teams_events_updated
 ```
 
 ### Uso Tipico
 
 ```python
-# Obtener instancia
-signals = SignalHub.get_instance()
+from src.core.signals import signals
 
-# Emitir senal
 signals.task_added.emit({'id': 1, 'title': 'Nueva tarea'})
-
-# Conectar a senal
 signals.task_added.connect(self._on_task_added)
 ```
+
+### Quien escucha que
+
+`TasksView` y `KanbanBoard` se suscriben por su cuenta a las senales de tarea.
+El resto de vistas (dashboard, calendario, horario, estadisticas) no lo hacen:
+`MainWindow._connect_signals()` conecta las cuatro senales de tarea a
+`refresh_views()`, que refresca todas las vistas que tengan `refresh()`.
+
+> Al anadir una vista nueva basta con darle un metodo `refresh()`. Si se
+> suscribe ademas por su cuenta, se refrescara dos veces por cambio.
+
+Desde un hilo que no sea el principal hay que envolver la actualizacion de UI en
+`GLib.idle_add()`, como hace `auto_sync`.
 
 ---
 
 ## Sistema de Estilos
 
-### Archivo: src/utils/styles.py
+### Archivos: `src/gtk/styles/style.css` y `src/gtk/styles/macos.css`
 
-### Paleta de Colores
+Una sola hoja para la aplicacion y para el widget. Antes cada uno definia sus
+propios `.glass-card` y `.task-card` con valores distintos, y parecian dos
+programas diferentes. Las carga `init_theme()`; en macOS se anade `macos.css`
+encima para sobreescribir lo especifico de Linux.
 
-```python
-COLORS = {
-    'primary': '66, 133, 244',      # Azul principal
-    'secondary': '81, 162, 218',    # Azul secundario
-    'success': '52, 168, 83',       # Verde
-    'warning': '251, 188, 4',       # Amarillo
-    'danger': '234, 67, 53',        # Rojo
-    'text_primary': '230, 230, 240',
-    'text_secondary': '180, 180, 190',
-    'text_muted': '140, 140, 150',
-    'bg_dark': '25, 25, 30',
-    'bg_medium': '35, 35, 40',
-    'bg_light': '50, 50, 55',
-    
-    # Categorias
-    'personal': '66, 133, 244',     # Azul
-    'universidad': '52, 168, 83',   # Verde
-    'fedora': '81, 162, 218',       # Azul claro
-    
-    # Prioridades
-    'priority_high': '234, 67, 53',   # Rojo
-    'priority_medium': '251, 188, 4', # Amarillo
-    'priority_low': '52, 168, 83',    # Verde
-}
-```
+### Paleta
 
-### Fuente
+Los colores se declaran como colores nombrados de Adwaita, respetando su
+contrato: `_bg_color` es el relleno solido, `_fg_color` el texto encima, y
+`accent_color` el acento usado como texto sobre el fondo de ventana (por eso es
+un azul mas oscuro: tiene que contrastar tambien en tema claro).
 
-```python
-FONT_FAMILY = "Source Code Pro"
-```
-
-### Estilos CSS Principales
-
-**Glassmorphism base:**
 ```css
-background-color: rgba(30, 30, 35, 230);
+@define-color accent_bg_color #4285f4;
+@define-color accent_fg_color #ffffff;
+@define-color accent_color    #1a73e8;
+@define-color success_color   #34a853;
+@define-color warning_color   #f9ab00;
+@define-color danger_color    #ea4335;
 ```
 
-**Tarjetas:**
-```css
-background-color: rgba(50, 50, 55, 180);
-border: 1px solid rgba(255, 255, 255, 0.05);
-border-radius: 8px;
-```
+Todo lo demas se apoya en `@window_bg_color`, `@card_bg_color` y
+`alpha(currentColor, x)`. **Regla: ningun color fijo para claro u oscuro.**
+`alpha(white, 0.1)` era invisible en tema claro; `alpha(currentColor, 0.1)`
+sigue al texto y funciona en los dos.
 
-**Botones:**
-```css
-background-color: rgba(255, 255, 255, 0.08);
-border: 1px solid rgba(COLOR, 0.3);
-border-radius: 6px;
-```
+### Clases propias
 
-### Funciones de Estilo
+| Clase | Uso |
+|-------|-----|
+| `.glass-card` | Tarjeta generica |
+| `.task-card` + `.priority-alta/media/baja` | Tarjeta de tarea con borde de prioridad |
+| `.color-dot` / `.color-bar` + `.accent/.warning/.error/.success` | Puntos e indicadores de color |
+| `.kanban-column`, `.kanban-column-header`, `.drag-hover` | Tablero Kanban |
+| `.schedule-cell`, `.schedule-day-header`, `.schedule-today` | Rejilla del horario |
+| `.chart-bar` | Barras del grafico semanal |
+| `.empty-list` | Quita el recuadro a una lista vacia |
+| `.pomodoro-timer`, `.pomodoro-time` | Cronometros monoespaciados |
 
-- get_main_window_style()
-- get_widget_style()
-- get_button_style(variant)
-- get_nav_button_style()
-- get_input_style()
-- get_combobox_style()
-- get_scrollbar_style()
-- get_scroll_area_style()
-- get_card_style()
-- get_category_color(category)
-- get_priority_color(priority)
-- get_deadline_color(deadline_str)
+El resto (`.title-1`..`.title-4`, `.dim-label`, `.caption`, `.heading`,
+`.boxed-list`, `.navigation-sidebar`, `.card`, `.flat`, `.circular`,
+`.suggested-action`) lo aporta Libadwaita: no se redefine.
+
+### Reglas al tocar la UI
+
+1. **Colores por clase CSS, no por `Gtk.CssProvider` por widget.**
+   `get_style_context().add_provider()` esta deprecado y ademas los providers se
+   acumulan: el horario creaba 91 (uno por celda) en cada refresco.
+   La unica excepcion viva son los eventos del horario, que llevan un color
+   arbitrario guardado en la base de datos.
+2. **Verificar que el icono existe.** GTK no avisa de un nombre inexistente:
+   dibuja un cuadro gris. `tests/test_icons.py` escanea el codigo y falla si
+   alguno no resuelve. Si Adwaita no lo tiene, se anade un SVG a
+   `assets/icons/hicolor/scalable/actions/`.
+3. **`Adw.StatusPage` solo a pagina completa.** Dentro de una tarjeta dibuja un
+   icono de 128px; ahi va `empty_state()` de `src/gtk/widgets/common.py`.
 
 ---
 
 ## Problemas Conocidos
 
-### QComboBox dropdown con fondo blanco
+### macOS no expone vibrancy a GTK
 
-**Problema:** En KDE Plasma con Wayland, los dropdown de QComboBox muestran un fondo blanco del sistema detras del contenido estilizado.
+**Problema:** Una ventana semi-transparente deja ver el escritorio y se lee mal.
 
-**Causa:** Qt usa el popup nativo del sistema en Wayland, ignorando los estilos CSS del QAbstractItemView.
+**Solucion:** `macos.css` hace la ventana opaca y el widget casi opaco (0.97).
+La translucidez real solo se usa en Linux.
 
-**Estado:** Sin solucion satisfactoria. Intentos de usar QListView personalizado rompen el renderizado del texto.
+### El tema Adwaita trae pocos iconos
 
-**Workaround:** Aceptar el fondo parcialmente visible o usar widgets alternativos.
+**Problema:** Nombres razonables como `view-column-symbolic` o
+`utilities-system-monitor-symbolic` no existen; GTK dibuja un cuadro gris sin
+emitir ningun aviso.
 
-### D-Bus Tray Icon Warning
+**Solucion:** `tests/test_icons.py` los detecta antes de que lleguen a la UI.
+Los que no existen se sustituyen por equivalentes reales o se anaden como SVG
+propio en `assets/icons/`.
 
-**Problema:** Al iniciar la app aparece:
-```
-QDBusTrayIcon encountered a D-Bus error: QDBusError("org.freedesktop.DBus.Error.ServiceUnknown")
-```
+### `CURRENT_TIMESTAMP` de SQLite es UTC
 
-**Causa:** El sistema no tiene un servicio de bandeja compatible activo.
+**Problema:** Las columnas con `DEFAULT CURRENT_TIMESTAMP` se guardan en UTC,
+pero las consultas comparaban contra `datetime.now()`, que es local. En UTC-5
+los pomodoros de la tarde contaban como del dia siguiente y desaparecian de "hoy".
 
-**Impacto:** Solo warning, no afecta funcionalidad.
+**Solucion:** `date(started_at, 'localtime')` en la consulta. Al escribir una
+consulta nueva sobre una fecha, comprobar en que huso esta cada lado.
 
-**Estado:** Ignorable, es comportamiento normal en algunos entornos.
+### Editar una tarea no puede arrastrar a sus vecinas
 
-### Drag and Drop visual glitches
+**Problema:** `update_task` y `delete_task` localizaban la tarea con
+`title in line`, una comparacion por subcadena: borrar "Estudiar" se llevaba por
+delante "Estudiar calculo" y "Estudiar fisica" del vault del usuario.
 
-**Problema:** Durante el drag and drop en el Kanban, ocasionalmente hay parpadeos visuales.
+**Solucion:** un unico parser (`_parse_task_line`) que devuelve el titulo real, y
+comparacion exacta contra el. Leer, actualizar y borrar pasan por el mismo sitio.
 
-**Causa:** Repintado rapido durante animaciones.
+### La UI solo se toca desde el hilo principal
 
-**Estado:** Mejorado significativamente, queda pulido pendiente.
+**Problema:** `sync_external_calendars()` corre en un hilo de fondo y emite
+senales desde ahi. Con una vista suscrita, GTK4 (que no es thread-safe) acababa
+en `Gtk-CRITICAL` y segfault intermitente.
+
+**Solucion:** `bind_signals()` en `src/gtk/widgets/common.py` envuelve cada
+callback en `GLib.idle_add`. **Toda** suscripcion al hub desde la UI debe pasar
+por ahi; ademas desconecta sola cuando el widget se destruye, porque el hub es
+un singleton de proceso y seguiria llamando a widgets ya liberados.
+
+### Las dependencias de calendario son opcionales
+
+**Problema:** `HAS_ICS` solo comprueba que el modulo se pueda importar, pero
+`icalendar` se valida despues, al construir el parser. Una `ImportError` ahi
+tumbaba la aplicacion entera al arrancar.
+
+**Solucion:** `TaskManager.__init__` construye la sincronizacion dentro de un
+`try`. Sin `icalendar` la app abre igual, solo sin calendarios.
 
 ---
 
@@ -661,7 +678,7 @@ QDBusTrayIcon encountered a D-Bus error: QDBusError("org.freedesktop.DBus.Error.
 - [x] Base de datos SQLite
 - [x] CRUD de tareas
 - [x] Sistema de senales
-- [x] Tema glassmorphism
+- [x] Sistema de estilos
 
 ### Fase 2 - UI Principal (COMPLETADA)
 
@@ -694,7 +711,7 @@ QDBusTrayIcon encountered a D-Bus error: QDBusError("org.freedesktop.DBus.Error.
 
 ### Fase 5 - Pulido (EN PROGRESO)
 
-- [x] Tests automatizados (43 tests passing)
+- [x] Tests automatizados (46 tests en verde)
 - [x] DevContainer para desarrollo
 - [ ] Animaciones suaves
 - [ ] Temas adicionales
@@ -738,37 +755,46 @@ Tipos:
 - Clases con mayuscula inicial
 - Variables y funciones en snake_case
 
-**PyQt6:**
-- Prefijo _ para metodos privados
-- Sufijo _layout, _widget para variables de layout
-- Conectar senales en metodo _connect_signals()
-- UI setup en metodo setup_ui()
+**GTK4:**
+- Prefijo `_` para metodos privados
+- Construccion de UI en `_setup_ui()`, conexiones en `_connect_signals()`
+- Colores y tamanos por clase CSS, nunca con un `Gtk.CssProvider` por widget
+- Comprobar que cada icono existe (`tests/test_icons.py` lo verifica)
 
-### Estructura de Nuevos Widgets
+### Estructura de una Vista Nueva
 
 ```python
-class NuevoWidget(QWidget):
-    # Senales primero
-    some_signal = pyqtSignal(type)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.signals = SignalHub.get_instance()
-        self.setup_ui()
-        self._connect_signals()
-    
-    def setup_ui(self):
-        """Construir la interfaz"""
-        pass
-    
-    def _connect_signals(self):
-        """Conectar senales del SignalHub"""
-        pass
-    
-    def _on_some_event(self):
-        """Handlers de eventos"""
-        pass
+class NuevaVista(Gtk.Box):
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        self.set_margin_top(20)     # margenes iguales que las demas vistas
+        self.set_margin_bottom(20)
+        self.set_margin_start(24)
+        self.set_margin_end(24)
+
+        self._setup_ui()
+        self.refresh()
+
+    def _setup_ui(self):
+        """Construir la interfaz. El titulo lo pone la barra: no repetirlo."""
+
+    def refresh(self):
+        """Releer datos. MainWindow.refresh_views() la llama en cada cambio."""
 ```
+
+Para que aparezca en el sidebar basta con anadirla a `NAV_ITEMS` en
+`src/gtk/window.py` (clave, etiqueta, titulo e icono) e instanciarla en
+`_build_stack()`. El atajo Cmd/Ctrl+N sale del orden de la lista.
+
+### Tests
+
+```bash
+python -m unittest discover -s tests    # 46 tests
+```
+
+Los tests **nunca** deben tocar el vault ni la base de datos reales:
+`Database(":memory:")` y `ObsidianSync(vault_paths=..., rough_notes_folder=...)`
+aceptan rutas inyectadas justamente para eso.
 
 ---
 
@@ -776,8 +802,8 @@ class NuevoWidget(QWidget):
 
 Desarrollador: Julian Leon
 Proyecto: UniDex
-Plataforma: Fedora Linux / KDE Plasma
+Plataformas: Linux (GNOME / KDE Plasma) y macOS 12+
 
 ---
 
-Ultima actualizacion: Enero 2026
+Ultima actualizacion: Agosto 2026

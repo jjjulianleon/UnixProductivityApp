@@ -14,10 +14,18 @@ from src.utils.constants import OBSIDIAN_VAULT_PATHS, OBSIDIAN_ROUGH_NOTES
 class ObsidianSync:
     """Handles synchronization with Obsidian vault using actual paths"""
     
-    def __init__(self):
-        self.vault_paths = OBSIDIAN_VAULT_PATHS
-        self.rough_notes_folder = OBSIDIAN_ROUGH_NOTES
-        
+    def __init__(self, vault_paths: Optional[Dict[str, Path]] = None,
+                 rough_notes_folder: Optional[Path] = None):
+        """Sin argumentos usa el vault real; los tests inyectan rutas temporales.
+
+        Se inyecta en vez de depender de $UNIDEX_OBSIDIAN_VAULT porque
+        constants.py resuelve las rutas al importarse: si otro modulo importa
+        src antes, la variable de entorno ya no cambia nada y los tests
+        acabarian escribiendo en el vault de verdad.
+        """
+        self.vault_paths = vault_paths if vault_paths is not None else OBSIDIAN_VAULT_PATHS
+        self.rough_notes_folder = rough_notes_folder or OBSIDIAN_ROUGH_NOTES
+
         # Ensure rough notes folder exists
         self.rough_notes_folder.mkdir(parents=True, exist_ok=True)
     
@@ -32,165 +40,219 @@ class ObsidianSync:
         
         return tasks
     
+    DESC_INDENT = "  "
+
     def _parse_tasks_file(self, file_path: Path, category: str) -> List[Dict]:
         """Parse tasks from a single Obsidian file"""
-        tasks = []
-        
         try:
-            content = file_path.read_text(encoding='utf-8')
+            lines = file_path.read_text(encoding='utf-8').split('\n')
         except Exception:
-            return tasks
-        
-        lines = content.split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            
-            # Basic task pattern
-            basic_match = re.match(r'^- \[([ xX])\] (.+)$', line)
-            
-            if not basic_match:
+            return []
+
+        tasks = []
+        index = 0
+        while index < len(lines):
+            task = self._parse_task_line(lines[index])
+            if not task:
+                index += 1
                 continue
-            
-            checkbox, raw_text = basic_match.groups()
-            is_completed = checkbox.lower() == 'x'
-            
-            # Clean the title - extract metadata and clean
-            title = raw_text.strip()
-            deadline = None
-            priority = 'media'
-            status = 'completado' if is_completed else 'pendiente'
-            
-            # Extract (en progreso) status
-            if '(en progreso)' in title.lower():
-                status = 'en progreso' if not is_completed else 'completado'
-                title = re.sub(r'\s*\(en progreso\)', '', title, flags=re.IGNORECASE)
-            
-            # Extract [deadline: YYYY-MM-DD]
-            deadline_match = re.search(r'\[deadline:\s*(\d{4}-\d{2}-\d{2})\]', title)
-            if deadline_match:
-                deadline = deadline_match.group(1)
-                title = re.sub(r'\s*\[deadline:\s*\d{4}-\d{2}-\d{2}\]', '', title)
-            
-            # Extract deadline from emoji format: 📅 YYYY-MM-DD
-            emoji_deadline = re.search(r'[📅🗓️]\s*(\d{4}-\d{2}-\d{2})', title)
-            if emoji_deadline and not deadline:
-                deadline = emoji_deadline.group(1)
-                title = re.sub(r'\s*[📅🗓️]\s*\d{4}-\d{2}-\d{2}', '', title)
-            
-            # Extract [priority: xxx]
-            priority_match = re.search(r'\[priority:\s*(\w+)\]', title, re.IGNORECASE)
-            if priority_match:
-                priority = priority_match.group(1).lower()
-                title = re.sub(r'\s*\[priority:\s*\w+\]', '', title, flags=re.IGNORECASE)
-            
-            # Remove completion markers: ✅ YYYY-MM-DD or (completado: YYYY-MM-DD)
-            title = re.sub(r'\s*✅\s*\d{4}-\d{2}-\d{2}', '', title)
-            title = re.sub(r'\s*\(completado:\s*\d{4}-\d{2}-\d{2}\)', '', title)
-            
-            # Remove | separator if present (for descriptions)
-            description = ''
-            if ' | ' in title:
-                parts = title.split(' | ', 1)
-                title = parts[0].strip()
-                description = parts[1].strip() if len(parts) > 1 else ''
-            
-            # Final cleanup
-            title = title.strip()
-            
-            if title:
-                tasks.append({
-                    'title': title,
-                    'description': description,
-                    'category': category,
-                    'status': status,
-                    'deadline': deadline,
-                    'priority': priority
-                })
-        
+
+            index += 1
+            # La descripcion multilinea va indentada debajo de la tarea; si la
+            # tarea traia el formato "titulo | descripcion" ese gana.
+            block, index = self._take_description_block(lines, index)
+            if block and not task['description']:
+                task['description'] = block
+
+            task['category'] = category
+            tasks.append(task)
+
         return tasks
-    
-    def add_task(self, title: str, category: str, status: str = "pendiente", 
-                 deadline: Optional[str] = None, priority: str = "media"):
+
+    @classmethod
+    def _take_description_block(cls, lines: List[str], index: int) -> tuple:
+        """Consume las lineas indentadas que siguen a una tarea. Devuelve (texto, indice)"""
+        collected = []
+        while index < len(lines):
+            line = lines[index]
+            # Se acaba en cuanto aparece algo sin indentar, una linea en blanco
+            # o una subtarea (que es una tarea por derecho propio).
+            if not line.strip() or not line[:1].isspace() or cls._parse_task_line(line):
+                break
+            collected.append(line.strip())
+            index += 1
+        return '\n'.join(collected), index
+
+    @staticmethod
+    def _parse_task_line(line: str) -> Optional[Dict]:
+        """Descompone una linea "- [ ] ..." en sus campos, o None si no lo es.
+
+        Es el unico sitio que sabe leer el formato: leer, actualizar y borrar
+        pasan por aqui, para que los tres entiendan lo mismo por "titulo".
+        """
+        basic_match = re.match(r'^- \[([ xX])\] (.+)$', line.strip())
+        if not basic_match:
+            return None
+
+        checkbox, raw_text = basic_match.groups()
+        is_completed = checkbox.lower() == 'x'
+
+        title = raw_text.strip()
+        deadline = None
+        priority = 'media'
+        status = 'completado' if is_completed else 'pendiente'
+
+        # (en progreso)
+        if '(en progreso)' in title.lower():
+            status = 'en progreso' if not is_completed else 'completado'
+            title = re.sub(r'\s*\(en progreso\)', '', title, flags=re.IGNORECASE)
+
+        # [deadline: YYYY-MM-DD]
+        deadline_match = re.search(r'\[deadline:\s*(\d{4}-\d{2}-\d{2})\]', title)
+        if deadline_match:
+            deadline = deadline_match.group(1)
+            title = re.sub(r'\s*\[deadline:\s*\d{4}-\d{2}-\d{2}\]', '', title)
+
+        # Formato emoji de Obsidian Tasks: 📅 YYYY-MM-DD
+        emoji_deadline = re.search(r'[📅🗓️]\s*(\d{4}-\d{2}-\d{2})', title)
+        if emoji_deadline and not deadline:
+            deadline = emoji_deadline.group(1)
+            title = re.sub(r'\s*[📅🗓️]\s*\d{4}-\d{2}-\d{2}', '', title)
+
+        # [priority: xxx]
+        priority_match = re.search(r'\[priority:\s*(\w+)\]', title, re.IGNORECASE)
+        if priority_match:
+            priority = priority_match.group(1).lower()
+            title = re.sub(r'\s*\[priority:\s*\w+\]', '', title, flags=re.IGNORECASE)
+
+        # Marcas de completado
+        title = re.sub(r'\s*✅\s*\d{4}-\d{2}-\d{2}', '', title)
+        title = re.sub(r'\s*\(completado:\s*\d{4}-\d{2}-\d{2}\)', '', title)
+
+        # "titulo | descripcion"
+        description = ''
+        if ' | ' in title:
+            # Formato antiguo, escrito a mano: "titulo | descripcion"
+            title, description = (part.strip() for part in title.split(' | ', 1))
+
+        title = title.strip()
+        if not title:
+            return None
+
+        return {
+            'title': title,
+            'description': description,
+            'status': status,
+            'deadline': deadline,
+            'priority': priority,
+        }
+
+    @staticmethod
+    def _task_line(title: str, status: str = "pendiente", deadline: Optional[str] = None,
+                   priority: str = "media", description: str = "") -> str:
+        """Compone la linea markdown. Contrapartida exacta de _parse_task_line."""
+        line = f"- [{'x' if status == 'completado' else ' '}] {title}"
+        if deadline:
+            line += f" [deadline: {deadline}]"
+        if priority and priority != 'media':
+            line += f" [priority: {priority}]"
+        if status == 'completado':
+            line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
+        elif status == 'en progreso':
+            line += " (en progreso)"
+        return line
+
+    @classmethod
+    def _task_block(cls, title: str, status: str = "pendiente", deadline: Optional[str] = None,
+                    priority: str = "media", description: str = "") -> List[str]:
+        """La tarea y, debajo, su descripcion indentada. Contrapartida del parser.
+
+        Se indenta en vez de meterlo todo en una linea porque estos archivos se
+        leen y editan en Obsidian: un "\\n" literal en medio de la tarea es
+        ilegible.
+        """
+        block = [cls._task_line(title, status, deadline, priority)]
+        if description and description.strip():
+            block += [cls.DESC_INDENT + part.strip()
+                      for part in description.strip().replace('\r\n', '\n').split('\n')]
+        return block
+
+    def add_task(self, title: str, category: str, status: str = "pendiente",
+                 deadline: Optional[str] = None, priority: str = "media",
+                 description: str = ""):
         """Add a task to the appropriate Obsidian file"""
         file_path = self.vault_paths.get(category)
         if not file_path:
             return
-        
-        # Ensure parent directory exists
+
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Create file if doesn't exist
         if not file_path.exists():
             file_path.write_text(f"# Pendientes {category}\n\n", encoding='utf-8')
-        
+
         content = file_path.read_text(encoding='utf-8')
-        
-        # Build task line
-        checkbox = 'x' if status == 'completado' else ' '
-        task_line = f"- [{checkbox}] {title}"
-        if deadline:
-            task_line += f" [deadline: {deadline}]"
-        if priority and priority != 'media':
-            task_line += f" [priority: {priority}]"
-        if status == 'completado':
-            task_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
-        elif status == 'en progreso':
-            task_line += " (en progreso)"
-        task_line += "\n"
-        
-        # Add at the end
-        content += task_line
+        # Si el archivo del usuario no terminaba en salto de linea, la tarea
+        # nueva se pegaba al final de la ultima linea existente.
+        if content and not content.endswith('\n'):
+            content += '\n'
+
+        content += '\n'.join(self._task_block(title, status, deadline, priority,
+                                              description)) + '\n'
         file_path.write_text(content, encoding='utf-8')
-    
+
     def update_task(self, old_title: str, category: str, **kwargs):
         """Update a task in the Obsidian file"""
         file_path = self.vault_paths.get(category)
         if not file_path or not file_path.exists():
             return
-        
-        content = file_path.read_text(encoding='utf-8')
-        lines = content.split('\n')
-        new_lines = []
-        
-        for line in lines:
-            if f"- [" in line and old_title in line:
-                # Found the task to update
-                new_title = kwargs.get('title', old_title)
-                new_status = kwargs.get('status')
-                new_deadline = kwargs.get('deadline')
-                new_priority = kwargs.get('priority', 'media')
-                
-                checkbox = 'x' if new_status == 'completado' else ' '
-                new_line = f"- [{checkbox}] {new_title}"
-                
-                if new_deadline:
-                    new_line += f" [deadline: {new_deadline}]"
-                if new_priority and new_priority != 'media':
-                    new_line += f" [priority: {new_priority}]"
-                if new_status == 'completado':
-                    new_line += f" (completado: {datetime.now().strftime('%Y-%m-%d')})"
-                elif new_status == 'en progreso':
-                    new_line += " (en progreso)"
-                
-                new_lines.append(new_line)
-            else:
-                new_lines.append(line)
-        
-        file_path.write_text('\n'.join(new_lines), encoding='utf-8')
-    
+
+        lines = file_path.read_text(encoding='utf-8').split('\n')
+        result = []
+        index = 0
+        while index < len(lines):
+            task = self._parse_task_line(lines[index])
+            # Comparacion por titulo exacto: con "old_title in line" actualizar
+            # "Estudiar" reescribia tambien "Estudiar calculo".
+            if not task or task['title'] != old_title:
+                result.append(lines[index])
+                index += 1
+                continue
+
+            index += 1
+            block_desc, index = self._take_description_block(lines, index)
+            current_desc = task['description'] or block_desc
+
+            result += self._task_block(
+                kwargs.get('title', task['title']),
+                kwargs.get('status', task['status']),
+                kwargs.get('deadline', task['deadline']),
+                kwargs.get('priority', task['priority']),
+                kwargs.get('description', current_desc),
+            )
+
+        file_path.write_text('\n'.join(result), encoding='utf-8')
+
     def delete_task(self, title: str, category: str):
         """Remove a task from the Obsidian file"""
         file_path = self.vault_paths.get(category)
         if not file_path or not file_path.exists():
             return
-        
-        content = file_path.read_text(encoding='utf-8')
-        lines = content.split('\n')
-        new_lines = [line for line in lines if not (f"- [" in line and title in line)]
-        
-        file_path.write_text('\n'.join(new_lines), encoding='utf-8')
-    
+
+        lines = file_path.read_text(encoding='utf-8').split('\n')
+        kept = []
+        index = 0
+        while index < len(lines):
+            task = self._parse_task_line(lines[index])
+            # Idem: "title in line" borraba toda tarea cuyo texto contuviera
+            # el titulo, no solo la que se pidio borrar.
+            if task and task['title'] == title:
+                index += 1
+                _, index = self._take_description_block(lines, index)  # y su descripcion
+                continue
+            kept.append(lines[index])
+            index += 1
+
+        file_path.write_text('\n'.join(kept), encoding='utf-8')
+
     def save_quick_note(self, title: str, content: str) -> str:
         """Save a quick note to Rough Notes folder"""
         safe_title = re.sub(r'[^\w\s-]', '', title)

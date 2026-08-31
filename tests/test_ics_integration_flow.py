@@ -10,16 +10,16 @@ from unittest.mock import MagicMock, patch
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.core.task_manager import TaskManager
-from src.core.database import db
+from src.core.database import db, Database
 from src.core.signals import signals
 
 class TestICSIntegration(unittest.TestCase):
     def setUp(self):
         # Use in-memory DB
-        db.conn = None
-        db.db_path = ":memory:"
-        db.connect()
-        db.create_tables()
+        # Base en memoria: Database ya conecta y crea las tablas en __init__.
+        fresh = Database(":memory:")
+        db.conn = fresh.conn
+        db.db_path = fresh.db_path
         
         # Reset TaskManager singleton
         TaskManager._instance = None

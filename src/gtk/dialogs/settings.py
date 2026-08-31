@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
+from src.utils.constants import APP_FONTS, font_css
 
 
 class SettingsDialog(Adw.PreferencesWindow):
@@ -68,15 +69,9 @@ class SettingsDialog(Adw.PreferencesWindow):
         
         self.font_row = Adw.ComboRow()
         self.font_row.set_title("Familia de fuente")
-        fonts = Gtk.StringList.new([
-            "Sistema (predeterminado)",
-            "Source Code Pro",
-            "Inter",
-            "Roboto",
-            "Ubuntu",
-            "Fira Code"
-        ])
-        self.font_row.set_model(fonts)
+        self.font_row.set_model(
+            Gtk.StringList.new([label for label, _ in APP_FONTS])
+        )
         self.font_row.connect("notify::selected", self._on_font_changed)
         font_group.add(self.font_row)
         
@@ -124,7 +119,7 @@ class SettingsDialog(Adw.PreferencesWindow):
         # Sync page
         sync_page = Adw.PreferencesPage()
         sync_page.set_title("Sincronización")
-        sync_page.set_icon_name("emblem-synchronizing-symbolic")
+        sync_page.set_icon_name("view-refresh-symbolic")
         
         # iCloud group
         icloud_group = Adw.PreferencesGroup()
@@ -234,16 +229,8 @@ class SettingsDialog(Adw.PreferencesWindow):
         
     def _on_font_changed(self, row, param):
         """Apply selected font"""
-        fonts = [
-            "",  # System default
-            "'Source Code Pro'",
-            "'Inter'",
-            "'Roboto'",
-            "'Ubuntu'",
-            "'Fira Code'"
-        ]
         selected = row.get_selected()
-        font_family = fonts[selected] if selected < len(fonts) else ""
+        font_family = font_css(selected)
         
         # Save to database
         try:
@@ -276,7 +263,8 @@ class SettingsDialog(Adw.PreferencesWindow):
         import json
         from pathlib import Path
         
-        config_dir = Path.home() / ".config" / "calendar_widget"
+        from src.utils.system import config_dir as _config_dir
+        config_dir = _config_dir("calendar_widget")
         config_dir.mkdir(parents=True, exist_ok=True)
         
         # Save iCloud config
@@ -331,7 +319,8 @@ class SettingsDialog(Adw.PreferencesWindow):
         import json
         from pathlib import Path
         
-        config_dir = Path.home() / ".config" / "calendar_widget"
+        from src.utils.system import config_dir as _config_dir
+        config_dir = _config_dir("calendar_widget")
         
         # Load iCloud
         icloud_file = config_dir / "icloud_config.json"

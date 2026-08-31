@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Icono de barras para la vista Estadisticas. El tema Adwaita no trae
+     ninguno de grafico, y los sustitutos (value-increase) se dibujan como
+     un simple "+". -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="#222222">
+    <rect x="2"  y="9"  width="3" height="5" rx="1"/>
+    <rect x="6.5" y="5"  width="3" height="9" rx="1"/>
+    <rect x="11" y="2"  width="3" height="12" rx="1"/>
+  </g>
+</svg>

@@ -12,9 +12,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
-
-# Obsidian Pasantías path
-PASANTIAS_MD_PATH = Path("/home/jjulianleon/Documents/Obsidian/Pasantías/Pendientes Pasantía.md")
+from src.utils.constants import OBSIDIAN_PASANTIAS as PASANTIAS_MD_PATH
+from src.utils.system import open_path
+from src.gtk.widgets.common import bind_signals, empty_state
 
 
 class DraggableTaskCard(Gtk.Box):
@@ -97,8 +97,7 @@ class DraggableTaskCard(Gtk.Box):
             return
         if n_press == 1:
             if self.task.get('source') == 'obsidian':
-                import subprocess
-                subprocess.Popen(['xdg-open', str(PASANTIAS_MD_PATH)])
+                open_path(PASANTIAS_MD_PATH)
                 return
             from .task_detail import TaskDetailDialog
             dialog = TaskDetailDialog(self.task, parent=self.get_root())
@@ -129,9 +128,8 @@ class KanbanColumn(Gtk.Box):
         
         indicator = Gtk.Box()
         indicator.set_size_request(4, 20)
-        css = Gtk.CssProvider()
-        css.load_from_data(f"box {{ background: {color}; border-radius: 2px; }}".encode())
-        indicator.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        indicator.add_css_class("color-bar")
+        indicator.add_css_class(color)
         header.append(indicator)
         
         title_label = Gtk.Label(label=title)
@@ -183,6 +181,12 @@ class KanbanColumn(Gtk.Box):
                 
     def update_count(self, count: int):
         self.count_label.set_text(str(count))
+        # Se llama despues de clear_tasks() y antes de add_task(), asi que
+        # count == 0 significa que la columna se queda vacia.
+        if count == 0:
+            self.task_list.append(
+                empty_state("list-add-symbolic", "Sin tareas",
+                            "Arrastra una tarjeta aqui"))
 
 
 class KanbanBoard(Gtk.Box):
@@ -200,10 +204,12 @@ class KanbanBoard(Gtk.Box):
         
         # Connect signals
         from src.core.signals import signals
-        signals.task_added.connect(self._on_task_signal)
-        signals.task_updated.connect(self._on_task_update_signal)
-        signals.task_deleted.connect(self._on_task_signal)
-        signals.tasks_reloaded.connect(self.refresh)
+        bind_signals(self, [
+            (signals.task_added, self._on_task_signal),
+            (signals.task_updated, self._on_task_update_signal),
+            (signals.task_deleted, self._on_task_signal),
+            (signals.tasks_reloaded, self.refresh),
+        ])
         
         self.refresh()
         
@@ -262,10 +268,11 @@ class KanbanBoard(Gtk.Box):
         self.columns_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         self.columns_box.set_vexpand(True)
         
+        # El tercer campo es la clase de color (ver .color-bar en style.css)
         columns_config = [
-            ("pendiente", "Pendiente", "#4285f4"),
-            ("en progreso", "En Progreso", "#fbbc05"),
-            ("completado", "Completado", "#34a853"),
+            ("pendiente", "Pendiente", "accent"),
+            ("en progreso", "En Progreso", "warning"),
+            ("completado", "Completado", "success"),
         ]
         
         self.columns = {}
