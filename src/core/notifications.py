@@ -2,7 +2,6 @@
 Notification Manager - Desktop notifications and scheduled reminders
 Uses GLib for timers to remain compatible with GTK
 """
-import subprocess
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from pathlib import Path
@@ -11,6 +10,7 @@ from gi.repository import GLib
 
 from .database import db
 from .signals import signals
+from ..utils.system import notify
 
 
 class NotificationManager:
@@ -61,23 +61,9 @@ class NotificationManager:
     
     def send_notification(self, title: str, message: str, urgency: str = "normal",
                           icon: Optional[str] = None):
-        """Send a desktop notification using notify-send"""
-        cmd = [
-            "notify-send",
-            "-u", urgency,
-            "-a", self.app_name,
-            title,
-            message
-        ]
-        
-        if icon:
-            cmd.extend(["-i", icon])
-        
-        try:
-            subprocess.run(cmd, check=True, capture_output=True)
+        """Send a desktop notification (notify-send on Linux, osascript on macOS)"""
+        if notify(title, message, urgency, app_name=self.app_name, icon=icon):
             signals.notification_triggered.emit(title, message, urgency)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
     
     def _check_reminders(self):
         """Check for pending reminders and trigger notifications"""

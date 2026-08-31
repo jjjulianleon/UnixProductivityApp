@@ -34,7 +34,12 @@ REDIRECT_URI = "http://localhost:8000/callback"
 SCOPES = ["Calendars.Read", "User.Read"]
 
 # Token storage
-TOKEN_FILE = "/home/jjulianleon/.config/calendar_widget/ms_token.json"
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+from src.utils.system import config_dir
+
+TOKEN_FILE = str(config_dir("calendar_widget") / "ms_token.json")
 
 
 class MSGraphAuth:

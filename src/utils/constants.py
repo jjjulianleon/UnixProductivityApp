@@ -3,6 +3,8 @@ Shared constants and configuration
 """
 from pathlib import Path
 
+from .system import IS_MAC, config_dir, data_dir, obsidian_vault
+
 # Application info
 APP_NAME = "UniDex"
 APP_VERSION = "1.0.0"
@@ -14,17 +16,46 @@ SEMESTER_START = datetime(2026, 1, 12)
 SEMESTER_END = datetime(2026, 5, 16)
 INTERNSHIP_END = datetime(2026, 2, 14)
 
-# Paths
-DATA_DIR = Path.home() / ".local" / "share" / APP_NAME
-CONFIG_DIR = Path.home() / ".config" / APP_NAME
+# Paths (platform-aware, see src/utils/system.py)
+DATA_DIR = data_dir(APP_NAME)
+CONFIG_DIR = config_dir(APP_NAME)
 
 # Obsidian paths
+OBSIDIAN_VAULT = obsidian_vault()
 OBSIDIAN_VAULT_PATHS = {
-    "Personal": Path.home() / "Documents/Obsidian/Personal/Pendientes Personal.md",
-    "Universidad": Path.home() / "Documents/Obsidian/Universidad/8vo Semestre/Pendientes Universidad.md",
-    "Fedora": Path.home() / "Documents/Obsidian/Pendientes Fedora.md"
+    "Personal": OBSIDIAN_VAULT / "Personal/Pendientes Personal.md",
+    "Universidad": OBSIDIAN_VAULT / "Universidad/8vo Semestre/Pendientes Universidad.md",
+    "Fedora": OBSIDIAN_VAULT / "Pendientes Fedora.md"
 }
-OBSIDIAN_ROUGH_NOTES = Path.home() / "Documents/Obsidian/Rough Notes"
+OBSIDIAN_ROUGH_NOTES = OBSIDIAN_VAULT / "Rough Notes"
+OBSIDIAN_PASANTIAS = OBSIDIAN_VAULT / "Pasantías/Pendientes Pasantía.md"
+
+# Fuentes ofrecidas en Configuracion: (etiqueta, familia CSS).
+# El indice es lo que se guarda en settings['app_font'], asi que el orden importa.
+# Una sola lista para el dialogo, la app y el widget.
+APP_FONTS = [
+    ("Sistema (predeterminado)", ""),
+    ("SF Mono", "'SF Mono'"),
+    ("Helvetica Neue", "'Helvetica Neue'"),
+    ("New York", "'New York'"),
+    ("Menlo", "'Menlo'"),
+    ("Fira Code", "'Fira Code'"),
+] if IS_MAC else [
+    ("Sistema (predeterminado)", ""),
+    ("Source Code Pro", "'Source Code Pro'"),
+    ("Inter", "'Inter'"),
+    ("Roboto", "'Roboto'"),
+    ("Ubuntu", "'Ubuntu'"),
+    ("Fira Code", "'Fira Code'"),
+]
+
+
+def font_css(index: int) -> str:
+    """Familia CSS para el indice guardado; cadena vacia = fuente del sistema"""
+    if isinstance(index, int) and 0 <= index < len(APP_FONTS):
+        return APP_FONTS[index][1]
+    return ""
+
 
 # Task statuses
 TASK_STATUSES = ["pendiente", "en progreso", "completado"]

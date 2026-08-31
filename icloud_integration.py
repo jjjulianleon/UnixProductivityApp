@@ -16,7 +16,11 @@ except ImportError:
     HAS_CALDAV = False
     print("caldav and icalendar libraries required: pip install caldav icalendar")
 
-CONFIG_DIR = Path.home() / ".config" / "calendar_widget"
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from src.utils.system import config_dir
+
+CONFIG_DIR = config_dir("calendar_widget")
 ICLOUD_CONFIG_FILE = CONFIG_DIR / "icloud_config.json"
 SYNC_CACHE_FILE = CONFIG_DIR / "icloud_sync_cache.json"
 

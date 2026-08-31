@@ -17,7 +17,7 @@ try:
     from src.core.task_manager import task_manager
 except ImportError:
     # Fallback if running from a different location
-    sys.path.insert(0, "/home/jjulianleon/Coding/CalendarWidget")
+    sys.path.insert(0, str(PROJECT_ROOT.resolve()))
     from src.core.database import db
     from src.core.task_manager import task_manager
 

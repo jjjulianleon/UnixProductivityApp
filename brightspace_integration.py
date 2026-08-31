@@ -50,7 +50,11 @@ BRIGHTSPACE_USERNAME = ""
 BRIGHTSPACE_PASSWORD = ""
 
 # Cache de deadlines
-CACHE_FILE = "/home/jjulianleon/.config/calendar_widget/brightspace_cache.json"
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from src.utils.system import config_dir, obsidian_vault
+
+CACHE_FILE = str(config_dir("calendar_widget") / "brightspace_cache.json")
 CACHE_DURATION_MINUTES = 30
 
 
@@ -194,7 +198,7 @@ class ManualDeadlines:
     Esto se sincroniza con un archivo JSON que puedes editar.
     """
     
-    DEADLINES_FILE = "/home/jjulianleon/Documents/Obsidian/Universidad/8vo Semestre/deadlines.json"
+    DEADLINES_FILE = str(obsidian_vault() / "Universidad" / "8vo Semestre" / "deadlines.json")
     
     @classmethod
     def load(cls) -> List[Dict]:

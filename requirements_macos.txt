@@ -1,0 +1,8 @@
+# macOS Version Requirements
+# GTK4, Libadwaita y PyGObject vienen de Homebrew (el venv se crea con
+# --system-site-packages para verlos):
+#   brew install gtk4 libadwaita pygobject3 adwaita-icon-theme librsvg
+
+icalendar>=5.0.0
+caldav>=1.0.0
+requests>=2.28.0

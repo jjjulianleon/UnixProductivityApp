@@ -39,7 +39,11 @@ except ImportError:
 
 
 # ============== CONFIGURATION ==============
-CONFIG_DIR = Path.home() / ".config" / "calendar_widget"
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from src.utils.system import config_dir
+
+CONFIG_DIR = config_dir("calendar_widget")
 CONFIG_FILE = CONFIG_DIR / "ics_config.json"
 CACHE_DIR = CONFIG_DIR / "cache"
 
@@ -83,7 +87,7 @@ class ICSConfig:
             "brightspace": {
                 "enabled": True,
                 "source": "file",  # "file" or "url"
-                "file_path": str(Path.home() / "Desktop/CalendarWidget/brightspace/feed.ics"),
+                "file_path": str(Path(__file__).parent / "brightspace" / "feed.ics"),
                 "url": "",
                 "import_as_tasks": True,
                 "category": "Universidad"
@@ -91,7 +95,7 @@ class ICSConfig:
             "teams": {
                 "enabled": True,
                 "source": "file",  # "file" or "url"
-                "file_path": str(Path.home() / "Desktop/CalendarWidget/teams/calendar.ics"),
+                "file_path": str(Path(__file__).parent / "teams" / "calendar.ics"),
                 "url": "https://outlook.office365.com/owa/calendar/91bdba2c9fd14d6fa042fb36a8f7043b@usfq.edu.ec/08d6df05166f4b71ba1deeb7141cee5c17574312868342675028/calendar.ics",
                 "import_as_events": True,
                 "filter_work_only": False
