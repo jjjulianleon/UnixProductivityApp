@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
-from src.utils.constants import APP_FONTS, font_css
+from src.utils.constants import APP_FONTS, CALENDAR_VIEWS, font_css
 
 
 class SettingsDialog(Adw.PreferencesWindow):
@@ -76,6 +76,23 @@ class SettingsDialog(Adw.PreferencesWindow):
         font_group.add(self.font_row)
         
         appearance_page.add(font_group)
+        
+        # Personalizacion
+        custom_group = Adw.PreferencesGroup()
+        custom_group.set_title("Personalización")
+        custom_group.set_description("Cómo se muestran las vistas de la app")
+        
+        self.calendar_view_row = Adw.ComboRow()
+        self.calendar_view_row.set_title("Vista del calendario")
+        self.calendar_view_row.set_subtitle("Puntos: rejilla con las tareas del día al lado. "
+                                            "Mes: cada día lista sus entregas")
+        self.calendar_view_row.set_model(
+            Gtk.StringList.new([label for label, _ in CALENDAR_VIEWS])
+        )
+        self.calendar_view_row.connect("notify::selected", self._on_calendar_view_changed)
+        custom_group.add(self.calendar_view_row)
+        
+        appearance_page.add(custom_group)
         
         self.add(appearance_page)
         
@@ -248,6 +265,12 @@ class SettingsDialog(Adw.PreferencesWindow):
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
             )
         
+    def _on_calendar_view_changed(self, row, param):
+        """Guardar la vista del calendario; la vista se entera por la senal"""
+        selected = row.get_selected()
+        if 0 <= selected < len(CALENDAR_VIEWS):
+            task_manager.set_setting('calendar_view', CALENDAR_VIEWS[selected][1])
+        
     def _on_save_pomodoro(self, btn):
         """Save pomodoro settings"""
         try:
@@ -318,6 +341,11 @@ class SettingsDialog(Adw.PreferencesWindow):
             # Load font
             font_idx = settings.get('app_font', 0)
             self.font_row.set_selected(font_idx)
+            
+            # Vista del calendario
+            view = settings.get('calendar_view', 'dots')
+            keys = [key for _label, key in CALENDAR_VIEWS]
+            self.calendar_view_row.set_selected(keys.index(view) if view in keys else 0)
             
             # Load sync config
             self._load_sync_config()

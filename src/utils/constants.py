@@ -59,6 +59,13 @@ def font_css(index: int) -> str:
     return ""
 
 
+# Vistas del calendario ofrecidas en Configuracion > Apariencia.
+# La clave es lo que se guarda en settings['calendar_view'].
+CALENDAR_VIEWS = [
+    ("Puntos", "dots"),
+    ("Mes", "month"),
+]
+
 # Task statuses
 TASK_STATUSES = ["pendiente", "en progreso", "completado"]
 

@@ -148,7 +148,8 @@ window.widget-window {
   border-top: 1px solid alpha(currentColor, 0.12);
   border-left: 1px solid alpha(currentColor, 0.12);
   padding: 4px 6px;
-  min-height: 84px;
+  /* Suelo bajo: las filas son homogeneas y expanden, la altura la da la ventana */
+  min-height: 60px;
 }
 
 .month-cell-outside {

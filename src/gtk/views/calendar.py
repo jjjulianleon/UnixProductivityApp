@@ -40,6 +40,11 @@ class CalendarView(Gtk.Box):
         self.selected_day = self.current_date.day
         
         self._setup_ui()
+
+        from src.core.signals import signals
+        from src.gtk.widgets.common import bind_signals
+        bind_signals(self, [(signals.settings_changed, self._on_setting_changed)])
+
         self.refresh()
         
     def _setup_ui(self):
@@ -63,16 +68,6 @@ class CalendarView(Gtk.Box):
         today_btn.connect("clicked", self._go_today)
         nav_box.append(today_btn)
         
-        # Selector de vista: puntos (compacta) o mes completo
-        switcher = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        switcher.add_css_class("linked")
-        self.dots_toggle = Gtk.ToggleButton(label="Puntos", active=True)
-        self.month_toggle = Gtk.ToggleButton(label="Mes", group=self.dots_toggle)
-        self.dots_toggle.connect("toggled", self._on_view_toggled)
-        switcher.append(self.dots_toggle)
-        switcher.append(self.month_toggle)
-        nav_box.append(switcher)
-        
         next_btn = Gtk.Button()
         next_btn.set_icon_name("go-next-symbolic")
         next_btn.add_css_class("circular")
@@ -89,6 +84,7 @@ class CalendarView(Gtk.Box):
         
         self.stack.add_named(self._build_dots_view(), "dots")
         self.stack.add_named(self._build_month_view(), "month")
+        self._apply_view_setting()
         
     def _build_dots_view(self) -> Gtk.Box:
         """Vista compacta: rejilla con puntos + tareas del dia a la derecha"""
@@ -142,20 +138,28 @@ class CalendarView(Gtk.Box):
         return root
         
     def _build_month_view(self) -> Gtk.Widget:
-        """Vista de mes completa: cada dia lista sus clases y sus entregas"""
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_vexpand(True)
-        
+        """Vista de mes completa: cada dia lista sus entregas
+
+        Sin ScrolledWindow a proposito: la rejilla expande y las filas son
+        homogeneas, asi el mes se reparte la altura que de la ventana en vez
+        de quedarse fijo y con scroll.
+        """
         self.month_grid = Gtk.Grid()
         self.month_grid.add_css_class("glass-card")
         self.month_grid.set_column_homogeneous(True)
         self.month_grid.set_row_homogeneous(True)
-        scroll.set_child(self.month_grid)
-        return scroll
+        self.month_grid.set_vexpand(True)
+        self.month_grid.set_hexpand(True)
+        return self.month_grid
         
-    def _on_view_toggled(self, btn):
-        self.stack.set_visible_child_name("dots" if btn.get_active() else "month")
+    def _apply_view_setting(self):
+        """La vista (puntos o mes) se elige en Configuracion > Apariencia"""
+        view = task_manager.get_setting('calendar_view', 'dots')
+        self.stack.set_visible_child_name("month" if view == "month" else "dots")
+        
+    def _on_setting_changed(self, key, value):
+        if key == 'calendar_view':
+            self._apply_view_setting()
         
     def _go_today(self, btn):
         self.current_date = datetime.now()
@@ -267,13 +271,8 @@ class CalendarView(Gtk.Box):
         return cell
 
     def _events_for(self, day) -> list:
-        """Clases del horario y entregas de ese dia, ordenadas por hora"""
-        # ponytail: una consulta por celda (42 al mes). Cachear por semana si
-        # el mes tarda en pintarse.
-        events = [
-            {'time': e.get('start_time', ''), 'title': e.get('title', ''), 'task': None}
-            for e in task_manager.get_schedule_events(day.weekday(), for_date=day)
-        ]
+        """Entregas de ese dia, ordenadas por hora. El horario no entra aqui"""
+        events = []
         for task in self.deadlines.get(day.isoformat(), []):
             deadline = task.get('deadline', '')
             events.append({
@@ -285,12 +284,10 @@ class CalendarView(Gtk.Box):
         return events
 
     def _create_event_row(self, event) -> Gtk.Widget:
-        is_task = event['task'] is not None
-
         marker = Gtk.Box()
-        marker.add_css_class("color-dot" if is_task else "color-bar")
-        marker.add_css_class("error" if is_task else "accent")
-        marker.set_size_request(6, 6) if is_task else marker.set_size_request(3, 14)
+        marker.add_css_class("color-dot")
+        marker.add_css_class("error")
+        marker.set_size_request(6, 6)
         marker.set_valign(Gtk.Align.CENTER)
 
         label = Gtk.Label(label=event['title'])
@@ -302,10 +299,6 @@ class CalendarView(Gtk.Box):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         row.append(marker)
         row.append(label)
-
-        if not is_task:
-            row.set_tooltip_text(f"{event['time']} {event['title']}")
-            return row
 
         btn = Gtk.Button(child=row)
         btn.add_css_class("flat")
