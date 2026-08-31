@@ -5,6 +5,9 @@ __pycache__/
 productivity.db
 *.db
 
+# Feeds de calendario: contienen datos personales (cursos, entregas, reuniones)
+*.ics
+
 # IDE
 .idea/
 .vscode/
