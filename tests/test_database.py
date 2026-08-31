@@ -8,7 +8,7 @@ import os
 import sys
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -455,6 +455,30 @@ class TestHorarioPorFecha(unittest.TestCase):
         self.assertEqual(self.db.get_schedule_events(0, for_date=despues), [])
         # Sin fecha se sigue viendo todo (editar / exportar)
         self.assertEqual(len(self.db.get_schedule_events(0)), 1)
+
+    def test_recurrente_respeta_su_rango_de_fechas(self):
+        """Un recurrente con rango solo se repite entre inicio y fin"""
+        inicio, fin = date(2026, 9, 7), date(2026, 10, 5)
+        self.db.add_schedule_event(title="Taller", day_of_week=0,
+                                   start_time="10:00", end_time="11:00",
+                                   start_date=inicio.isoformat(),
+                                   end_date=fin.isoformat())
+
+        for dia in (inicio, date(2026, 9, 21), fin):
+            self.assertEqual(len(self.db.get_schedule_events(0, for_date=dia)), 1, dia)
+        for dia in (inicio - timedelta(days=7), fin + timedelta(days=7)):
+            self.assertEqual(self.db.get_schedule_events(0, for_date=dia), [], dia)
+
+    def test_recurrente_sin_fin_no_termina(self):
+        """El fin es opcional: sin el, se repite hasta el fin de semestre"""
+        inicio = date(2026, 9, 7)
+        self.db.add_schedule_event(title="Taller", day_of_week=0,
+                                   start_time="10:00", end_time="11:00",
+                                   start_date=inicio.isoformat())
+
+        self.assertEqual(self.db.get_schedule_events(0, for_date=inicio - timedelta(days=7)), [])
+        for dia in (inicio, date(2026, 12, 14)):
+            self.assertEqual(len(self.db.get_schedule_events(0, for_date=dia)), 1, dia)
 
     def test_evento_puntual_solo_en_su_fecha(self):
         dia = SEMESTER_END.date() - timedelta(days=14)

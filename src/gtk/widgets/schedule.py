@@ -7,7 +7,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 
 from gi.repository import Gtk, Adw, GLib, Gdk, GObject
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import sys
 from pathlib import Path
 
@@ -18,6 +18,64 @@ from src.core.task_manager import task_manager
 from src.utils.constants import INTERNSHIP_END
 
 DAY_NAMES_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+class DateRow(Adw.ActionRow):
+    """Fila con un mini calendario en un popover para elegir una fecha"""
+
+    def __init__(self, title: str, subtitle: str, clearable: bool):
+        super().__init__(title=title)
+        self._date = None
+        # Al fijar la fecha desde codigo hay que callar el "day-selected" que
+        # emite el propio Gtk.Calendar, o se llamaria a si mismo.
+        self._syncing = False
+
+        self.calendar = Gtk.Calendar()
+        self.calendar.connect("day-selected", self._on_day_selected)
+
+        self.button = Gtk.MenuButton(valign=Gtk.Align.CENTER)
+        self.button.set_icon_name("x-office-calendar-symbolic")
+        self.button.set_popover(Gtk.Popover(child=self.calendar))
+        self.add_suffix(self.button)
+
+        if clearable:
+            clear = Gtk.Button(icon_name="edit-clear-symbolic", valign=Gtk.Align.CENTER)
+            clear.add_css_class("flat")
+            clear.set_tooltip_text("Quitar la fecha")
+            clear.connect("clicked", lambda _b: self.set_date(None))
+            self.add_suffix(clear)
+
+        self._empty_subtitle = subtitle
+        self.set_date(None)
+
+    def _on_day_selected(self, calendar):
+        if self._syncing:
+            return
+        picked = calendar.get_date()
+        self.set_date(date(picked.get_year(), picked.get_month(),
+                           picked.get_day_of_month()))
+
+    def set_date(self, value):
+        self._date = value
+        self.remove_css_class("error")
+        self.set_subtitle(value.strftime("%d/%m/%Y") if value else self._empty_subtitle)
+        if value:
+            # select_day esta deprecado en GTK4; con las propiedades hay que
+            # bajar el dia primero o un 31 en un mes corto se sale de rango.
+            self._syncing = True
+            self.calendar.set_property("day", 1)
+            self.calendar.set_property("year", value.year)
+            self.calendar.set_property("month", value.month - 1)
+            self.calendar.set_property("day", value.day)
+            self._syncing = False
+
+    def get_date(self):
+        return self._date
+
+    def flag(self, message: str):
+        """Marca la fila en rojo con el motivo"""
+        self.add_css_class("error")
+        self.set_subtitle(message)
 
 
 class AddEventDialog(Adw.Window):
@@ -33,7 +91,7 @@ class AddEventDialog(Adw.Window):
         self.event = event
         self.is_edit = event is not None
         self.set_title("Editar Evento" if self.is_edit else "Nuevo Evento")
-        self.set_default_size(400, 450)
+        self.set_default_size(400, 620)
         self.set_modal(True)
         if parent:
             self.set_transient_for(parent)
@@ -133,6 +191,26 @@ class AddEventDialog(Adw.Window):
         group4 = Adw.PreferencesGroup()
         group4.add(self.recurring)
         content.append(group4)
+
+        # Rango de fechas del evento recurrente. Solo tiene sentido si repite,
+        # asi que el grupo aparece y desaparece con el interruptor.
+        self.range_group = Adw.PreferencesGroup()
+        self.range_group.set_title("Definir rango de fechas")
+        self.range_group.set_description("Desde cuando y hasta cuando se repite")
+
+        self.start_date_row = DateRow("Inicio", "Obligatorio", clearable=False)
+        self.end_date_row = DateRow("Fin", "Opcional: sin fecha, no termina",
+                                    clearable=True)
+        self.range_group.add(self.start_date_row)
+        self.range_group.add(self.end_date_row)
+        content.append(self.range_group)
+
+        if self.event:
+            self.start_date_row.set_date(self._event_date('start_date'))
+            self.end_date_row.set_date(self._event_date('end_date'))
+
+        self.recurring.connect("notify::active", self._on_recurring_toggled)
+        self.range_group.set_visible(self.recurring.get_active())
         
         # Color picker
         self.color_row = Adw.ComboRow()
@@ -157,6 +235,17 @@ class AddEventDialog(Adw.Window):
         content.append(group5)
 
         main_box.append(content)
+
+    def _event_date(self, key):
+        """Fecha guardada del evento que se edita, si la tiene"""
+        raw = (self.event or {}).get(key)
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date() if raw else None
+        except (TypeError, ValueError):
+            return None
+
+    def _on_recurring_toggled(self, switch, param):
+        self.range_group.set_visible(switch.get_active())
 
     def _on_day_toggled(self, button):
         """Impide quedarse sin ningun dia marcado"""
@@ -185,6 +274,19 @@ class AddEventDialog(Adw.Window):
             end = self.end_entry.get_text()
             recurring = 1 if self.recurring.get_active() else 0
 
+            start_date = end_date = None
+            if recurring:
+                start_date = self.start_date_row.get_date()
+                end_date = self.end_date_row.get_date()
+                if start_date is None:
+                    self.start_date_row.flag("Elige la fecha de inicio")
+                    return
+                if end_date and end_date < start_date:
+                    self.end_date_row.flag("El fin va despues del inicio")
+                    return
+            start_date = start_date.isoformat() if start_date else None
+            end_date = end_date.isoformat() if end_date else None
+
             if self.is_edit and self.event.get('id'):
                 # El evento que se estaba editando se queda en el primer dia
                 # marcado; los demas se crean como eventos nuevos.
@@ -194,7 +296,10 @@ class AddEventDialog(Adw.Window):
                     day_of_week=days[0],
                     start_time=start,
                     end_time=end,
-                    color=selected_color
+                    color=selected_color,
+                    recurring=recurring,
+                    start_date=start_date,
+                    end_date=end_date
                 )
                 days = days[1:]
 
@@ -205,7 +310,9 @@ class AddEventDialog(Adw.Window):
                     start_time=start,
                     end_time=end,
                     color=selected_color,
-                    recurring=recurring
+                    recurring=recurring,
+                    start_date=start_date,
+                    end_date=end_date
                 )
         except Exception as e:
             print(f"Error saving event: {e}")
@@ -396,6 +503,8 @@ class WeeklySchedule(Gtk.Box):
                 'color': event['color'],
                 'day_of_week': event.get('day_of_week', day_index),
                 'recurring': event.get('recurring', 1),
+                'start_date': event.get('start_date'),
+                'end_date': event.get('end_date'),
                 'is_db_event': True
             }
             events_to_show.append(formatted_event)

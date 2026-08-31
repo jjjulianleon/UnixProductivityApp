@@ -110,6 +110,8 @@ class Database:
                 color TEXT DEFAULT '66, 133, 244',
                 recurring INTEGER DEFAULT 1,
                 event_date TEXT,
+                start_date TEXT,
+                end_date TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -154,6 +156,12 @@ class Database:
 
         if 'event_date' not in schedule_columns:
             cursor.execute("ALTER TABLE schedule_events ADD COLUMN event_date TEXT")
+
+        # Rango de fechas de un evento recurrente. NULL = sin limite, que es
+        # como se comportaban todos los eventos antes de existir estas columnas.
+        for column in ('start_date', 'end_date'):
+            if column not in schedule_columns:
+                cursor.execute(f"ALTER TABLE schedule_events ADD COLUMN {column} TEXT")
 
         self.conn.commit()
     
@@ -460,11 +468,14 @@ class Database:
     
     def add_schedule_event(self, title: str, day_of_week: int, start_time: str,
                           end_time: str, color: str = "66, 133, 244",
-                          recurring: int = 1, event_date: Optional[str] = None) -> int:
+                          recurring: int = 1, event_date: Optional[str] = None,
+                          start_date: Optional[str] = None,
+                          end_date: Optional[str] = None) -> int:
         cursor = self.conn.cursor()
         cursor.execute(
-            "INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color, recurring, event_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (title, day_of_week, start_time, end_time, color, recurring, event_date)
+            "INSERT INTO schedule_events (title, day_of_week, start_time, end_time, color, recurring, event_date, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (title, day_of_week, start_time, end_time, color, recurring, event_date,
+             start_date, end_date)
         )
         self.conn.commit()
         return cursor.lastrowid
@@ -504,16 +515,24 @@ class Database:
 
     @staticmethod
     def _event_on_date(event: Dict, day) -> bool:
-        """Un evento recurrente cae toda semana; uno puntual solo en su fecha"""
-        if event.get('recurring', 1) == 1:
-            return True
-        event_date = event.get('event_date')
-        if not event_date:
-            return True
+        """Un recurrente cae toda semana dentro de su rango; uno puntual solo
+        en su fecha. Rango vacio = sin limite."""
+        if event.get('recurring', 1) != 1:
+            if not event.get('event_date'):
+                return True
+            return Database._as_date(event['event_date']) == day
+
+        start = Database._as_date(event.get('start_date'))
+        end = Database._as_date(event.get('end_date'))
+        return not (start and day < start) and not (end and day > end)
+
+    @staticmethod
+    def _as_date(value):
+        """YYYY-MM-DD a date; None si viene vacio o corrupto"""
         try:
-            return datetime.strptime(event_date, "%Y-%m-%d").date() == day
-        except ValueError:
-            return False
+            return datetime.strptime(value, "%Y-%m-%d").date() if value else None
+        except (TypeError, ValueError):
+            return None
     
     def delete_schedule_event(self, event_id: int) -> bool:
         cursor = self.conn.cursor()

@@ -6,6 +6,7 @@ Necesita una sesion grafica (GTK4). Se omite automaticamente si no la hay.
 """
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -112,6 +113,7 @@ class TestEventoVariosDias(unittest.TestCase):
         dialog.title_entry.set_text("Proyecto Integrador CMP")
         dialog.start_entry.set_text("07:00")
         dialog.end_entry.set_text("08:20")
+        dialog.start_date_row.set_date(date(2026, 8, 17))
         dialog.day_buttons[2].set_active(True)  # ademas del lunes, miercoles
 
         self.assertEqual(dialog.selected_days(), [0, 2])
@@ -123,6 +125,33 @@ class TestEventoVariosDias(unittest.TestCase):
             self.assertEqual(evento['title'], "Proyecto Integrador CMP")
             self.assertEqual(evento['start_time'], "07:00")
             self.assertEqual(evento['end_time'], "08:20")
+            self.assertEqual(evento['start_date'], "2026-08-17")
+            self.assertIsNone(evento['end_date'])
+
+    def test_repetir_exige_fecha_de_inicio(self):
+        """Si repite cada semana, sin inicio no se guarda nada"""
+        dialog = self.dialog(default_day=0, default_hour=7)
+        dialog.title_entry.set_text("Clase sin fecha")
+
+        self.assertTrue(dialog.recurring.get_active())
+        self.assertTrue(dialog.range_group.get_visible())
+        dialog._on_save(None)
+
+        self.assertEqual(self.db.get_schedule_events(), [])
+        self.assertTrue(dialog.start_date_row.has_css_class("error"))
+
+    def test_sin_repetir_no_pide_rango(self):
+        dialog = self.dialog(default_day=0, default_hour=7)
+        dialog.title_entry.set_text("Charla suelta")
+        dialog.recurring.set_active(False)
+
+        self.assertFalse(dialog.range_group.get_visible())
+        dialog._on_save(None)
+
+        creados = self.db.get_schedule_events()
+        self.assertEqual(len(creados), 1)
+        self.assertEqual(creados[0]['recurring'], 0)
+        self.assertIsNone(creados[0]['start_date'])
 
     def test_no_se_puede_dejar_sin_ningun_dia(self):
         dialog = self.dialog(default_day=1, default_hour=9)
@@ -140,6 +169,7 @@ class TestEventoVariosDias(unittest.TestCase):
         evento['start'], evento['end'] = evento['start_time'], evento['end_time']
 
         dialog = self.dialog(event=evento)
+        dialog.start_date_row.set_date(date(2026, 8, 18))
         dialog.day_buttons[3].set_active(True)  # martes + jueves
         dialog._on_save(None)
 

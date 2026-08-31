@@ -483,9 +483,11 @@ class TaskManager:
     # Schedule
     def add_schedule_event(self, title: str, day_of_week: int, start_time: str,
                           end_time: str, color: str = "66, 133, 244",
-                          recurring: int = 1, event_date: str = None) -> int:
+                          recurring: int = 1, event_date: str = None,
+                          start_date: str = None, end_date: str = None) -> int:
         """Add a schedule event"""
-        event_id = db.add_schedule_event(title, day_of_week, start_time, end_time, color, recurring, event_date)
+        event_id = db.add_schedule_event(title, day_of_week, start_time, end_time, color,
+                                         recurring, event_date, start_date, end_date)
         signals.schedule_updated.emit()
         return event_id
     
