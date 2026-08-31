@@ -112,6 +112,10 @@ class ICSConfig:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
             
     def get(self, key: str, default=None):
+        # Releer del disco en cada lectura: el dialogo de Ajustes reescribe
+        # ics_config.json mientras la app corre, y las instancias de sync viven
+        # todo el proceso. Sin esto habia que reiniciar para ver el nuevo feed.
+        self.config = self._load_config()
         return self.config.get(key, default)
         
     def set(self, key: str, value):
@@ -140,6 +144,8 @@ class ICSParser:
             
     def parse_url(self, url: str) -> List[Dict]:
         """Parse events from an ICS URL"""
+        if not url:
+            return []
         if not HAS_REQUESTS:
             print("requests library required: pip install requests")
             return []
@@ -249,8 +255,11 @@ class BrightspaceIntegration:
     def __init__(self, config: ICSConfig):
         self.config = config
         self.parser = ICSParser()
-        self.bs_config = config.get("brightspace", {})
-        
+
+    @property
+    def bs_config(self) -> dict:
+        return self.config.get("brightspace", {})
+
     def get_deadlines(self) -> List[Dict]:
         """Get all upcoming deadlines from Brightspace"""
         events = self._fetch_events()
@@ -357,8 +366,11 @@ class TeamsIntegration:
     def __init__(self, config: ICSConfig):
         self.config = config
         self.parser = ICSParser()
-        self.teams_config = config.get("teams", {})
-        
+
+    @property
+    def teams_config(self) -> dict:
+        return self.config.get("teams", {})
+
     def get_events(self, days_ahead: int = 30) -> List[Dict]:
         """Get upcoming events from Teams calendar"""
         events = self._fetch_events()

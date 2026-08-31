@@ -123,3 +123,45 @@ class TestICSIntegration(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestICSConfigReload(unittest.TestCase):
+    """La config ICS se reescribe desde Ajustes mientras la app corre."""
+
+    def setUp(self):
+        import tempfile
+        import ics_integration
+        self.ics_integration = ics_integration
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.config_file = Path(self.tmp.name) / "ics_config.json"
+        self._orig = (ics_integration.CONFIG_DIR, ics_integration.CONFIG_FILE)
+        ics_integration.CONFIG_DIR = Path(self.tmp.name)
+        ics_integration.CONFIG_FILE = self.config_file
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        self.ics_integration.CONFIG_DIR, self.ics_integration.CONFIG_FILE = self._orig
+
+    def _write(self, url):
+        import json
+        self.config_file.write_text(json.dumps(
+            {"brightspace": {"enabled": True, "source": "url", "url": url}}))
+
+    def test_get_relee_del_disco(self):
+        self._write("https://viejo/feed.ics")
+        config = self.ics_integration.ICSConfig()
+        self.assertEqual(config.get("brightspace")["url"], "https://viejo/feed.ics")
+
+        # Ajustes guarda una URL nueva con la app abierta
+        self._write("https://nuevo/feed.ics")
+        self.assertEqual(config.get("brightspace")["url"], "https://nuevo/feed.ics")
+
+    def test_bs_config_no_se_queda_congelado(self):
+        self._write("https://viejo/feed.ics")
+        config = self.ics_integration.ICSConfig()
+        with patch.object(self.ics_integration, 'ICSParser', MagicMock()):
+            bs = self.ics_integration.BrightspaceIntegration(config)
+            self.assertEqual(bs.bs_config["url"], "https://viejo/feed.ics")
+            self._write("https://nuevo/feed.ics")
+            self.assertEqual(bs.bs_config["url"], "https://nuevo/feed.ics")

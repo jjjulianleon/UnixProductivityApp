@@ -261,6 +261,7 @@ class SettingsDialog(Adw.PreferencesWindow):
     def _on_save_sync(self, btn):
         """Save sync configuration"""
         import json
+        import threading
         from pathlib import Path
         
         from src.utils.system import config_dir as _config_dir
@@ -276,23 +277,32 @@ class SettingsDialog(Adw.PreferencesWindow):
         with open(config_dir / "icloud_config.json", 'w') as f:
             json.dump(icloud_config, f, indent=2)
             
-        # Save ICS config
-        ics_config = {
-            "brightspace": {
-                "enabled": True,
-                "source": "url",
-                "url": self.d2l_url.get_text()
-            },
-            "teams": {
-                "enabled": True,
-                "source": "url", 
-                "url": self.teams_url.get_text()
-            }
-        }
-        with open(config_dir / "ics_config.json", 'w') as f:
+        # Guardar config ICS fusionando: escribir el dict entero borraba
+        # file_path, course_mappings y demas claves que el sync necesita.
+        ics_file = config_dir / "ics_config.json"
+        try:
+            with open(ics_file) as f:
+                ics_config = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            ics_config = {}
+
+        for key, entry in (("brightspace", self.d2l_url), ("teams", self.teams_url)):
+            url = entry.get_text().strip()
+            section = ics_config.setdefault(key, {})
+            section["enabled"] = True
+            section["url"] = url
+            # Sin URL no se puede leer del feed remoto: volver al archivo local.
+            section["source"] = "url" if url else "file"
+
+        with open(ics_file, 'w') as f:
             json.dump(ics_config, f, indent=2)
-            
+
         btn.set_label("✓ Guardado")
+
+        # Sincronizar ya con la config recien guardada: antes el calendario solo
+        # aparecia tras cerrar y reabrir la app.
+        threading.Thread(target=task_manager.sync_external_calendars,
+                         daemon=True).start()
         
     def _load_settings(self):
         try:
