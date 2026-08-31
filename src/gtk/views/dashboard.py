@@ -300,8 +300,8 @@ class DashboardView(Gtk.Box):
                 break
                 
         # Get today's events
-        today_weekday = datetime.now().weekday()
-        events = task_manager.get_schedule_events(today_weekday)
+        today = datetime.now()
+        events = task_manager.get_schedule_events(today.weekday(), for_date=today.date())
         
         if not events:
             fill_empty(self.schedule_list, "weather-clear-symbolic",

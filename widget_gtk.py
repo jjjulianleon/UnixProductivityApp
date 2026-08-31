@@ -18,11 +18,7 @@ from src.core.task_manager import task_manager
 from src.core.database import db
 from src.gtk import init_theme
 from src.utils.system import IS_MAC
-
-# Semester configuration
-SEMESTER_START = datetime(2026, 1, 12)
-SEMESTER_END = datetime(2026, 5, 16)
-INTERNSHIP_END = datetime(2026, 2, 14)
+from src.utils.constants import INTERNSHIP_END
 
 
 class WidgetApp(Adw.Application):
@@ -364,23 +360,12 @@ class WidgetWindow(Adw.ApplicationWindow):
         today = now.date()
 
         # Get schedule events for today from database
-        today_events = db.get_schedule_events(now.weekday())
+        # for_date aplica el fin de semestre y los eventos de un solo dia
+        today_events = db.get_schedule_events(now.weekday(), for_date=today)
 
-        # Filter by semester and internship dates
+        # Filter by internship dates
         filtered_events = []
         for evt in today_events:
-            # Check recurring vs one-time
-            is_recurring = evt.get('recurring', 1) == 1
-            event_date_str = evt.get('event_date')
-
-            if not is_recurring and event_date_str:
-                try:
-                    event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
-                    if today != event_date:
-                        continue
-                except ValueError:
-                    continue
-
             # Filter internship events
             title_lower = evt.get('title', '').lower()
             is_internship = any(kw in title_lower for kw in ['pasant', 'trabajo', 'intern', 'work'])

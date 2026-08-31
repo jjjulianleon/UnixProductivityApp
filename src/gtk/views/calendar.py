@@ -45,7 +45,7 @@ class CalendarView(Gtk.Box):
         prev_btn = Gtk.Button()
         prev_btn.set_icon_name("go-previous-symbolic")
         prev_btn.add_css_class("circular")
-        prev_btn.connect("clicked", self._prev_month)
+        prev_btn.connect("clicked", self._shift_month, -1)
         nav_box.append(prev_btn)
         
         self.month_label = Gtk.Label()
@@ -56,7 +56,7 @@ class CalendarView(Gtk.Box):
         next_btn = Gtk.Button()
         next_btn.set_icon_name("go-next-symbolic")
         next_btn.add_css_class("circular")
-        next_btn.connect("clicked", self._next_month)
+        next_btn.connect("clicked", self._shift_month, 1)
         nav_box.append(next_btn)
         
         calendar_box.append(nav_box)
@@ -104,19 +104,18 @@ class CalendarView(Gtk.Box):
         tasks_box.append(scroll)
         self.append(tasks_box)
         
-    def _prev_month(self, btn):
-        if self.current_date.month == 1:
-            self.current_date = self.current_date.replace(year=self.current_date.year - 1, month=12)
-        else:
-            self.current_date = self.current_date.replace(month=self.current_date.month - 1)
+    def _shift_month(self, btn, delta: int):
+        """Mueve el calendario delta meses.
+
+        Con day=1 siempre: hacer replace(month=...) conservando el dia lanzaba
+        ValueError los dias 29-31 (un 31 de agosto no existe en septiembre) y
+        los botones de navegacion se quedaban muertos.
+        """
+        month = self.current_date.month - 1 + delta
+        year = self.current_date.year + month // 12
+        self.current_date = self.current_date.replace(year=year, month=month % 12 + 1, day=1)
         self._update_calendar()
-        
-    def _next_month(self, btn):
-        if self.current_date.month == 12:
-            self.current_date = self.current_date.replace(year=self.current_date.year + 1, month=1)
-        else:
-            self.current_date = self.current_date.replace(month=self.current_date.month + 1)
-        self._update_calendar()
+        self._show_day_tasks(1)
         
     def refresh(self):
         self.deadlines = {}

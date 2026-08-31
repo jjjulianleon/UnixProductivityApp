@@ -3,6 +3,7 @@ Tests for database operations
 """
 import unittest
 import tempfile
+import shutil
 import os
 import sys
 import json
@@ -13,6 +14,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.database import Database
+from src.utils.constants import SEMESTER_END
 
 
 class TestDatabase(unittest.TestCase):
@@ -426,6 +428,41 @@ class TestDatabase(unittest.TestCase):
         tasks = self.db.get_all_tasks()
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0]['title'], "Original")
+
+
+class TestHorarioPorFecha(unittest.TestCase):
+    """get_schedule_events(for_date=...) filtra por fin de semestre y fecha"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        Database._instance = None
+        self.db = Database(str(Path(self.temp_dir) / "test.db"))
+
+    def tearDown(self):
+        self.db.conn.close()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_recurrente_se_corta_tras_fin_de_semestre(self):
+        """El horario semanal no se repite pasada la semana del 16 de diciembre"""
+        self.db.add_schedule_event(title="Algoritmos", day_of_week=0,
+                                   start_time="13:00", end_time="14:20")
+        dentro = SEMESTER_END.date() - timedelta(days=7)
+        fuera = SEMESTER_END.date() + timedelta(days=1)
+
+        self.assertEqual(len(self.db.get_schedule_events(0, for_date=dentro)), 1)
+        self.assertEqual(self.db.get_schedule_events(0, for_date=fuera), [])
+        # Sin fecha se sigue viendo todo (editar / exportar)
+        self.assertEqual(len(self.db.get_schedule_events(0)), 1)
+
+    def test_evento_puntual_solo_en_su_fecha(self):
+        dia = SEMESTER_END.date() - timedelta(days=14)
+        self.db.add_schedule_event(title="Examen", day_of_week=dia.weekday(),
+                                   start_time="09:00", end_time="10:00",
+                                   recurring=0, event_date=dia.isoformat())
+
+        self.assertEqual(len(self.db.get_schedule_events(dia.weekday(), for_date=dia)), 1)
+        otra_semana = dia - timedelta(days=7)
+        self.assertEqual(self.db.get_schedule_events(dia.weekday(), for_date=otra_semana), [])
 
 
 if __name__ == '__main__':

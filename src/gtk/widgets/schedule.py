@@ -15,12 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from src.core.task_manager import task_manager
 
 
-DAY_NAMES_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+from src.utils.constants import INTERNSHIP_END
 
-# Semester configuration
-SEMESTER_START = datetime(2026, 1, 12)
-SEMESTER_END = datetime(2026, 5, 16)
-INTERNSHIP_END = datetime(2026, 2, 14)
+DAY_NAMES_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
 
 class AddEventDialog(Adw.Window):
@@ -381,21 +378,9 @@ class WeeklySchedule(Gtk.Box):
         events_to_show = []
 
         # Load from Database only (FIXED_SCHEDULE removed)
-        db_events = task_manager.get_schedule_events(day_index)
+        # for_date aplica el fin de semestre y los eventos de un solo dia
+        db_events = task_manager.get_schedule_events(day_index, for_date=day_date.date())
         for event in db_events:
-            # Check if event is recurring or one-time
-            is_recurring = event.get('recurring', 1) == 1
-            event_date_str = event.get('event_date')
-
-            if not is_recurring and event_date_str:
-                # Non-recurring event: only show on the specific date
-                try:
-                    event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
-                    if day_date.date() != event_date:
-                        continue  # Skip if not the right date
-                except ValueError:
-                    continue  # Skip if date is invalid
-
             # Filter internship events after deadline
             title_lower = event.get('title', '').lower()
             is_internship = any(kw in title_lower for kw in ['pasant', 'trabajo', 'intern', 'work'])

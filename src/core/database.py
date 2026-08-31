@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from ..utils.system import data_dir
+from ..utils.constants import SEMESTER_END
 
 
 class Database:
@@ -478,13 +479,41 @@ class Database:
         self.conn.commit()
         return cursor.rowcount > 0
     
-    def get_schedule_events(self, day_of_week: Optional[int] = None) -> List[Dict]:
+    def get_schedule_events(self, day_of_week: Optional[int] = None,
+                            for_date=None) -> List[Dict]:
+        """Eventos del horario, opcionalmente los que caen en `for_date`.
+
+        Sin `for_date` devuelve la tabla tal cual (exportar, editar). Con fecha
+        aplica las dos reglas de calendario en un solo sitio, porque antes cada
+        vista (horario, dashboard, widget) las repetia a su manera:
+          - el horario no se repite pasado el fin de semestre,
+          - un evento no recurrente solo aparece en su propia fecha.
+        """
         cursor = self.conn.cursor()
         if day_of_week is not None:
             cursor.execute("SELECT * FROM schedule_events WHERE day_of_week = ?", (day_of_week,))
         else:
             cursor.execute("SELECT * FROM schedule_events")
-        return [dict(row) for row in cursor.fetchall()]
+        events = [dict(row) for row in cursor.fetchall()]
+
+        if for_date is None:
+            return events
+        if for_date > SEMESTER_END.date():
+            return []
+        return [e for e in events if self._event_on_date(e, for_date)]
+
+    @staticmethod
+    def _event_on_date(event: Dict, day) -> bool:
+        """Un evento recurrente cae toda semana; uno puntual solo en su fecha"""
+        if event.get('recurring', 1) == 1:
+            return True
+        event_date = event.get('event_date')
+        if not event_date:
+            return True
+        try:
+            return datetime.strptime(event_date, "%Y-%m-%d").date() == day
+        except ValueError:
+            return False
     
     def delete_schedule_event(self, event_id: int) -> bool:
         cursor = self.conn.cursor()

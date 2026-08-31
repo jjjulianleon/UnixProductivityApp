@@ -496,9 +496,10 @@ class TaskManager:
             signals.schedule_updated.emit()
         return success
     
-    def get_schedule_events(self, day_of_week: Optional[int] = None) -> List[Dict]:
-        """Get schedule events"""
-        return db.get_schedule_events(day_of_week)
+    def get_schedule_events(self, day_of_week: Optional[int] = None,
+                            for_date=None) -> List[Dict]:
+        """Get schedule events (con for_date se filtran por fecha real)"""
+        return db.get_schedule_events(day_of_week, for_date)
     
     def delete_schedule_event(self, event_id: int) -> bool:
         """Delete a schedule event"""
